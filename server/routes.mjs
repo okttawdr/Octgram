@@ -23,7 +23,25 @@ export async function routeRequest(context) {
     if (!new Set(["home", "explore", "saved", "profile"]).has(scope)) throw invalid();
     return { data: await repo.feed(scope, optionalInteger(searchParams.get("beforeId")), searchParams.get("authorId")) };
   }
-  if (method === "POST" && pathname === "/api/posts") { const value = object(body); return { status: 201, data: await repo.publishPost(string(value.caption ?? "", { max: 2200 }), media(value.media), uuid(value.requestId), optionalInteger(value.thumbnailIndex) || 0) }; }
+  if (method === "POST" && pathname === "/api/posts") {
+  const value = object(body);
+  const postMedia = media(value.media);
+  const thumbnailIndex = integer(value.thumbnailIndex ?? 0, { min: 0 });
+
+  if (thumbnailIndex >= postMedia.length) {
+    throw invalid("Thumbnail tidak valid.");
+  }
+
+  return {
+    status: 201,
+    data: await repo.publishPost(
+      string(value.caption ?? "", { max: 2200 }),
+      postMedia,
+      uuid(value.requestId),
+      thumbnailIndex,
+    ),
+  };
+}
   match = pathname.match(/^\/api\/posts\/(\d+)$/);
   if (method === "GET" && match) return { data: await repo.post(integer(match[1]), user.id) };
   match = pathname.match(/^\/api\/posts\/(\d+)\/comments$/);
