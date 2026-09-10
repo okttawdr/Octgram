@@ -28,7 +28,7 @@ const Saved = lazy(() => import("./Saved"));
 const Notifications = lazy(() => import("./Notifications"));
 const Messages = lazy(() => import("./Messages"));
 const LivePage = lazy(() => import("./Live"));
-import { useIncomingCalls, CallRoom, IncomingCallBanner, callInvite } from "./Call";
+import { useIncomingCalls, CallRoom, IncomingCallBanner, callInvite, cancelInvite } from "./Call";
 export default function App() {
   const callback = location.pathname === "/auth/callback";
   const [session, setSession] = useState<Session | null>(null);
@@ -303,7 +303,23 @@ function Shell({
         <IncomingCallBanner
           invite={invite}
           onAccept={() => { setActiveCall({ callId: invite.callId, peer: invite.fromProfile, isCaller: false }); setInvite(null); }}
-          onDecline={() => setInvite(null)}
+          onDecline={() => {
+            const id = invite.callId;
+            const from = invite.from;
+            setInvite(null);
+            const channel = (async () => {
+              const { db: database } = await import("./lib");
+              const ch = database.channel(`call:${id}`);
+              ch.subscribe((s) => {
+                if (s === "SUBSCRIBED") {
+                  void ch.send({ type: "broadcast", event: "signal", payload: { type: "decline", from: uid } });
+                  setTimeout(() => void database.removeChannel(ch), 1200);
+                }
+              });
+            })();
+            void channel;
+            void from;
+          }}
         />
       )}
       {activeCall && (
@@ -313,7 +329,10 @@ function Shell({
           peer={activeCall.peer}
           callId={activeCall.callId}
           isCaller={activeCall.isCaller}
-          onClose={() => setActiveCall(null)}
+          onClose={() => {
+            if (activeCall.isCaller) cancelInvite(activeCall.peer.id, activeCall.callId);
+            setActiveCall(null);
+          }}
         />
       )}
     </div>

@@ -79,12 +79,15 @@ create table public.messages (
  id bigint generated always as identity primary key,
  conversation_id uuid not null references public.conversations(id) on delete cascade,
  sender_id uuid not null references public.profiles(id) on delete cascade,
- body text not null check(char_length(trim(body)) between 1 and 2000),
+ body text not null default '' check((char_length(trim(body)) between 1 and 2000) or (body = '' and image_path is not null)),
  client_id uuid not null,
+ image_path text,
+ reply_to bigint references public.messages(id) on delete set null,
  created_at timestamptz not null default now(),
  unique(sender_id,client_id)
 );
 create index messages_conversation on public.messages(conversation_id,id desc);
+create index messages_reply on public.messages(reply_to);
 create table public.rate_buckets (
  user_id uuid not null references public.profiles(id) on delete cascade,
  action text not null,
@@ -207,15 +210,24 @@ begin
  if not exists(select 1 from public.profiles where id=target) then raise exception 'Pengguna tidak ditemukan'; end if;
  insert into public.conversations(user_a,user_b) values(least(auth.uid(),target),greatest(auth.uid(),target)) on conflict(user_a,user_b) do update set user_a=excluded.user_a returning id into cid; return cid;
 end $$;
-create or replace function public.send_message(target uuid,body_value text,request_id uuid) returns bigint language plpgsql security definer set search_path='' as $$
+drop function if exists public.send_message(uuid,text,uuid);
+create or replace function public.send_message(target uuid,body_value text,request_id uuid,image_value text default null,reply_value bigint default null) returns bigint language plpgsql security definer set search_path='' as $$
 declare mid bigint;
 begin
  if auth.uid() is null or not exists(select 1 from public.conversations where id=target and auth.uid() in(user_a,user_b)) then raise exception 'Percakapan tidak tersedia'; end if;
  if request_id is null then raise exception 'Request ID tidak valid'; end if;
  perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text||request_id::text,0));
  select id into mid from public.messages where sender_id=auth.uid() and client_id=request_id; if mid is not null then return mid; end if;
+ body_value := coalesce(trim(body_value),'');
+ image_value := nullif(trim(coalesce(image_value,'')),'');
+ if body_value = '' and image_value is null then raise exception 'Tulis pesan atau pilih gambar.'; end if;
+ if char_length(body_value) > 2000 then raise exception 'Pesan maksimal 2000 karakter.'; end if;
+ if image_value is not null then
+   if char_length(image_value) > 200 or image_value not like 'octgram/chat/'||auth.uid()::text||'\_%' escape '\' then raise exception 'Gambar belum terunggah. Unggah ulang gambarnya.'; end if;
+ end if;
+ if reply_value is not null and not exists(select 1 from public.messages where id=reply_value and conversation_id=target) then raise exception 'Pesan yang dibalas tidak ditemukan.'; end if;
  perform public.check_rate('message',120,3600);
- insert into public.messages(conversation_id,sender_id,body,client_id) values(target,auth.uid(),trim(body_value),request_id) returning id into mid;
+ insert into public.messages(conversation_id,sender_id,body,client_id,image_path,reply_to) values(target,auth.uid(),body_value,request_id,image_value,reply_value) returning id into mid;
  update public.conversations set updated_at=now() where id=target; return mid;
 end $$;
 create or replace function public.feed(before_id bigint default null,author_id uuid default null) returns jsonb language sql stable security invoker set search_path='' as $$
@@ -232,8 +244,8 @@ create or replace function public.saved_feed(before_id bigint default null) retu
 $$;
 
 revoke execute on function public.touch_updated_at(),public.handle_new_user(),public.check_rate(text,integer,integer),public.notify(uuid,text,bigint,text),public.notify_mentions(text,bigint,text) from public,anon,authenticated;
-revoke execute on function public.set_follow(uuid,boolean),public.set_like(bigint,boolean),public.set_bookmark(bigint,boolean),public.publish_post(text,jsonb,uuid,smallint),public.add_comment(bigint,text,bigint),public.start_chat(uuid),public.send_message(uuid,text,uuid),public.feed(bigint,uuid),public.explore_feed(bigint),public.saved_feed(bigint) from public,anon;
-grant execute on function public.set_follow(uuid,boolean),public.set_like(bigint,boolean),public.set_bookmark(bigint,boolean),public.publish_post(text,jsonb,uuid,smallint),public.add_comment(bigint,text,bigint),public.start_chat(uuid),public.send_message(uuid,text,uuid),public.feed(bigint,uuid),public.explore_feed(bigint),public.saved_feed(bigint) to authenticated;
+revoke execute on function public.set_follow(uuid,boolean),public.set_like(bigint,boolean),public.set_bookmark(bigint,boolean),public.publish_post(text,jsonb,uuid,smallint),public.add_comment(bigint,text,bigint),public.start_chat(uuid),public.send_message(uuid,text,uuid,text,bigint),public.feed(bigint,uuid),public.explore_feed(bigint),public.saved_feed(bigint) from public,anon;
+grant execute on function public.set_follow(uuid,boolean),public.set_like(bigint,boolean),public.set_bookmark(bigint,boolean),public.publish_post(text,jsonb,uuid,smallint),public.add_comment(bigint,text,bigint),public.start_chat(uuid),public.send_message(uuid,text,uuid,text,bigint),public.feed(bigint,uuid),public.explore_feed(bigint),public.saved_feed(bigint) to authenticated;
 
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) values('photos','photos',true,5242880,array['image/webp']) on conflict(id) do update set public=excluded.public,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
 create or replace function public.storage_capacity() returns boolean language sql stable security definer set search_path='' as $$

@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { ArrowRight, Camera } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { authService } from "./services/auth";
 import { errorText } from "./lib";
-import { Brand, ErrorBox } from "./ui";
+import { Brand, BrandMark, ErrorBox } from "./ui";
 
 type Mode = "login" | "signup" | "reset";
 
@@ -45,7 +45,7 @@ export default function AuthPage({ recovery = false, onRecovered }: { recovery?:
       <section className="auth-art">
         <Brand />
         <div className="art-center">
-          <div className="octagon"><Camera size={86} strokeWidth={1.1} /></div>
+          <div className="octagon"><BrandMark size={86} /></div>
           <p className="eyebrow">YOUR EVERYDAY, IN FRAME</p>
           <h1>Momen kecil.<br />Cerita yang berarti.</h1>
           <p>Satu foto, seribu cara untuk terhubung.</p>

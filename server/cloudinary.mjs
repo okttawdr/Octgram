@@ -10,12 +10,12 @@ export function createCloudinary(config) {
   return {
     cloudName: cloud,
     apiKey,
-    signUpload({ userId, itemId }) {
+    signUpload({ userId, itemId, kind = "post" }) {
       const timestamp = Math.floor(Date.now() / 1000);
       const publicId = `${userId}_${itemId}`;
-      const folder = "octgram/posts";
+      const folder = kind === "chat" ? "octgram/chat" : "octgram/posts";
       const signature = sign({ folder, public_id: publicId, timestamp });
-      return { cloudName: cloud, apiKey, timestamp, signature, publicId, folder };
+      return { cloudName: cloud, apiKey, timestamp, signature, publicId, folder, kind };
     },
     async destroy(publicId) {
       const timestamp = Math.floor(Date.now() / 1000);

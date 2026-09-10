@@ -1,4 +1,4 @@
-import { boolean, integer, invalid, media, object, optionalInteger, string, uuid } from "./validation.mjs";
+import { boolean, integer, invalid, media, object, optionalImagePath, optionalInteger, optionalUuid, string, uuid } from "./validation.mjs";
 
 export async function routeRequest(context) {
   const { method, pathname, searchParams, body, repository: repo, user, livekit, cloudinary, agora, metered } = context;
@@ -59,7 +59,7 @@ export async function routeRequest(context) {
   if (method === "GET" && match) return { data: await repo.conversation(uuid(match[1])) };
   match = pathname.match(/^\/api\/conversations\/([0-9a-f-]+)\/messages$/i);
   if (method === "GET" && match) return { data: await repo.messages(uuid(match[1]), optionalInteger(searchParams.get("beforeId"))) };
-  if (method === "POST" && match) { const value = object(body); return { status: 201, data: await repo.sendMessage(uuid(match[1]), string(value.body, { min: 1, max: 2000 }), uuid(value.requestId)) }; }
+  if (method === "POST" && match) { const value = object(body); const rawBody = typeof value.body === "string" ? value.body : ""; const imagePath = optionalImagePath(value.imagePath, user.id); const replyTo = value.replyTo == null ? null : integer(value.replyTo); if (!rawBody.trim() && !imagePath) throw invalid("Tulis pesan atau pilih gambar."); return { status: 201, data: await repo.sendMessage(uuid(match[1]), string(rawBody || "", { max: 2000 }), uuid(value.requestId), imagePath, replyTo) }; }
   if (method === "GET" && pathname === "/api/live") {
     return { data: await repo.liveFeed() };
   }
@@ -106,13 +106,14 @@ export async function routeRequest(context) {
     const value = object(body);
     const itemId = string(value.itemId ?? "", { min: 1, max: 64 }).replace(/[^a-zA-Z0-9_-]/g, "");
     if (!itemId) throw invalid("itemId tidak valid.");
-    return { data: cloudinary.signUpload({ userId: user.id, itemId }) };
+    const kind = value.kind === "chat" ? "chat" : "post";
+    return { data: cloudinary.signUpload({ userId: user.id, itemId, kind }) };
   }
   if (method === "DELETE" && pathname === "/api/uploads") {
     if (!cloudinary) throw invalid("Cloudinary belum dikonfigurasi di server.");
     const value = object(body);
     const publicId = string(value.publicId ?? "", { min: 1, max: 200 });
-    if (!publicId.startsWith(`octgram/posts/${user.id}_`)) throw invalid("Tidak berwenang.");
+    if (!publicId.startsWith(`octgram/posts/${user.id}_`) && !publicId.startsWith(`octgram/chat/${user.id}_`)) throw invalid("Tidak berwenang.");
     await cloudinary.destroy(publicId);
     return { data: null };
   }

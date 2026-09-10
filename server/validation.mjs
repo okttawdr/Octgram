@@ -7,6 +7,10 @@ export function boolean(value) { if (typeof value !== "boolean") throw invalid()
 export function string(value, { min = 0, max = 2200 } = {}) { if (typeof value !== "string" || value.trim().length < min || value.length > max) throw invalid(); return value; }
 export function uuid(value) { const text = string(value, { min: 36, max: 36 }); if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)) throw invalid(); return text; }
 export function object(value) { if (!value || typeof value !== "object" || Array.isArray(value)) throw invalid(); return value; }
+export function optionalString(value, { max = 200 } = {}) { if (value == null || value === "") return null; return string(value, { max }); }
+export function optionalUuid(value) { if (value == null || value === "") return null; return uuid(value); }
+export function imagePath(value, userId) { const p = string(value, { min: 10, max: 200 }); if (!p.startsWith(`octgram/chat/${userId}_`)) throw invalid("Gambar belum terunggah. Unggah ulang gambarnya."); return p; }
+export function optionalImagePath(value, userId) { if (value == null || value === "") return null; return imagePath(value, userId); }
 export function media(value) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 20) throw invalid("Pilih 1–20 foto.");
   return value.map((item) => {

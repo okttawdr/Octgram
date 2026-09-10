@@ -2,18 +2,25 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { Camera, LoaderCircle } from "lucide-react";
 import { photo, go, type Profile, errorText } from "./lib";
+export function BrandMark({ size = 22 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 64 64" width={size} height={size} fill="none" aria-hidden="true">
+      <path
+        d="M24 8h16l16 16v16L40 56H24L8 40V24z"
+        stroke="currentColor"
+        strokeWidth="5"
+        strokeLinejoin="round"
+      />
+      <circle cx="32" cy="32" r="9.5" stroke="currentColor" strokeWidth="5" />
+      <circle cx="41.5" cy="22.5" r="3.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 export function Brand() {
   return (
     <span className="brand">
       <span className="brand-icon" aria-hidden="true">
-        <svg viewBox="0 0 32 32" width="22" height="22" fill="none">
-          <path
-            d="M16 2c7.7 0 14 6.3 14 14s-6.3 14-14 14S2 23.7 2 16 8.3 2 16 2Z"
-            stroke="currentColor"
-            strokeWidth="2.6"
-          />
-          <path d="M16 2v11.2L24.9 8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
-        </svg>
+        <BrandMark size={22} />
       </span>
       Octgram<span className="brand-dot">.</span>
     </span>

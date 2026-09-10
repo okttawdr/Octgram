@@ -1,5 +1,13 @@
 const unwrap = ({ data, error }) => { if (error) throw error; return data; };
 
+async function withReplies(db, rows) {
+  const ids = [...new Set((rows || []).map((r) => r.reply_to).filter(Boolean))];
+  if (!ids.length) return (rows || []).map((r) => ({ ...r, reply: null }));
+  const parents = unwrap(await db.from("messages").select("id,sender_id,body,image_path").in("id", ids));
+  const byId = new Map(parents.map((p) => [p.id, p]));
+  return (rows || []).map((r) => ({ ...r, reply: r.reply_to ? byId.get(r.reply_to) || null : null }));
+}
+
 export function createRepository(db) {
   return {
     me: async (id) => { const [profile, followers] = await Promise.all([db.from("profiles").select("id,username,display_name,bio,website,avatar_path").eq("id", id).single(), db.from("follows").select("*", { count: "exact", head: true }).eq("following_id", id)]); if (profile.error) throw profile.error; return { ...profile.data, follower_count: followers.count || 0 }; },
@@ -37,12 +45,12 @@ export function createRepository(db) {
     conversations: async (beforeUpdated, beforeId) => { let q = db.from("conversations").select("id,user_a,user_b,updated_at,a:profiles!conversations_user_a_fkey(id,username,display_name,avatar_path),b:profiles!conversations_user_b_fkey(id,username,display_name,avatar_path)").order("updated_at", { ascending: false }).order("id", { ascending: false }).limit(20); if (beforeUpdated && beforeId) q = q.or(`updated_at.lt.${beforeUpdated},and(updated_at.eq.${beforeUpdated},id.lt.${beforeId})`); return unwrap(await q); },
     conversation: async (id) => unwrap(await db.from("conversations").select("id,user_a,user_b,updated_at,a:profiles!conversations_user_a_fkey(id,username,display_name,avatar_path),b:profiles!conversations_user_b_fkey(id,username,display_name,avatar_path)").eq("id", id).single()),
     startChat: async (userId) => unwrap(await db.rpc("start_chat", { target: userId })),
-    messages: async (conversationId, beforeId) => { let q = db.from("messages").select("id,sender_id,body,created_at,client_id").eq("conversation_id", conversationId).order("id", { ascending: false }).limit(30); if (beforeId) q = q.lt("id", beforeId); return unwrap(await q); },
+    messages: async (conversationId, beforeId) => { let q = db.from("messages").select("id,sender_id,body,image_path,reply_to,created_at,client_id").eq("conversation_id", conversationId).order("id", { ascending: false }).limit(30); if (beforeId) q = q.lt("id", beforeId); const rows = unwrap(await q); return withReplies(db, rows); },
     liveFeed: async () => unwrap(await db.rpc("live_feed")),
     liveStream: async (id) => unwrap(await db.rpc("live_stream", { target: id })),
     joinLive: async (id) => unwrap(await db.rpc("join_live", { target: id })),
     startLive: async (title, providers) => unwrap(await db.rpc("start_live", { title_value: title, agora_available: providers.agoraAvailable, livekit_available: providers.livekitAvailable })),
     endLive: async (id) => unwrap(await db.rpc("end_live", { target: id })),
-    async sendMessage(conversationId, body, requestId) { const id = unwrap(await db.rpc("send_message", { target: conversationId, body_value: body, request_id: requestId })); return unwrap(await db.from("messages").select("id,sender_id,body,created_at,client_id").eq("id", id).single()); },
+    async sendMessage(conversationId, body, requestId, imagePath = null, replyTo = null) { let id; try { id = unwrap(await db.rpc("send_message", { target: conversationId, body_value: body, request_id: requestId, image_value: imagePath, reply_value: replyTo })); } catch (e) { if (String(e?.message || e).includes("image_value") || String(e?.message || e).includes("reply_value")) { id = unwrap(await db.rpc("send_message", { target: conversationId, body_value: body, request_id: requestId })); } else throw e; } const row = unwrap(await db.from("messages").select("id,sender_id,body,image_path,reply_to,created_at,client_id").eq("id", id).single()); const [full] = await withReplies(db, [row]); return full || row; },
   };
 }
