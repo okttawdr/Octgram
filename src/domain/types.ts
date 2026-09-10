@@ -1,0 +1,11 @@
+export type Profile = { id: string; username: string; display_name: string; bio: string; website: string; avatar_path: string | null; created_at?: string };
+export type Media = { path: string; width: number; height: number; bytes: number };
+export type Post = { id: number; user_id: string; caption: string; media: Media[]; thumbnail_index: number; created_at: string; author: Profile; like_count: number; comment_count: number; liked: boolean; bookmarked: boolean };
+export type Comment = { id: number; post_id?: number; user_id?: string; body: string; parent_id: number | null; created_at: string; author: Profile };
+export type Notification = { id: number; kind: "like" | "comment" | "follow" | "mention" | "live"; post_id: number | null; read_at: string | null; created_at: string; actor: Profile };
+export type Conversation = { id: string; user_a: string; user_b: string; updated_at: string; a: Profile; b: Profile };
+export type Message = { id: number; conversation_id?: string; sender_id: string; body: string; client_id: string; created_at: string };
+export type ProfileDetails = Profile & { follower_count: number; following_count: number; post_count: number; is_following: boolean };
+export type LiveStream = { id: number; title: string; room_name: string; provider: "agora" | "livekit"; started_at: string; status?: "live" | "ended"; host: Profile };
+export type LiveJoin = LiveStream & { token: string | null; chat_token: string | null; session_minutes?: number; reservation_minutes?: number; is_host?: boolean };
+export type ChatEvent = { kind: "chat"; body: string; from: string; name: string };
