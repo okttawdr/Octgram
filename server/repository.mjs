@@ -3,7 +3,7 @@ const unwrap = ({ data, error }) => { if (error) throw error; return data; };
 async function withReplies(db, rows) {
   const ids = [...new Set((rows || []).map((r) => r.reply_to).filter(Boolean))];
   if (!ids.length) return (rows || []).map((r) => ({ ...r, reply: null }));
-  const parents = unwrap(await db.from("messages").select("id,sender_id,body,image_path").in("id", ids));
+  const parents = unwrap(await db.from("messages").select("id,sender_id,body,image_path,media_type,media_once").in("id", ids));
   const byId = new Map(parents.map((p) => [p.id, p]));
   return (rows || []).map((r) => ({ ...r, reply: r.reply_to ? byId.get(r.reply_to) || null : null }));
 }
@@ -43,6 +43,7 @@ export function createRepository(db) {
     deletePost: async (postId) => unwrap(await db.rpc("delete_post", { target: postId })),
     setRepost: async (postId, enabled) => unwrap(await db.rpc("set_repost", { target: postId, enabled })),
     postLikes: async (postId) => unwrap(await db.rpc("post_likes", { target: postId })),
+    postReposters: async (postId) => unwrap(await db.rpc("post_reposters", { target: postId })),
     async followList(username, kind) {
       const profile = unwrap(await db.from("profiles").select("id").eq("username", username.toLowerCase()).single());
       return unwrap(await db.rpc("follow_list", { target: profile.id, kind_value: kind }));
@@ -57,12 +58,14 @@ export function createRepository(db) {
     conversations: async (beforeUpdated, beforeId) => { let q = db.from("conversations").select("id,user_a,user_b,updated_at,a:profiles!conversations_user_a_fkey(id,username,display_name,avatar_path),b:profiles!conversations_user_b_fkey(id,username,display_name,avatar_path)").order("updated_at", { ascending: false }).order("id", { ascending: false }).limit(20); if (beforeUpdated && beforeId) q = q.or(`updated_at.lt.${beforeUpdated},and(updated_at.eq.${beforeUpdated},id.lt.${beforeId})`); return unwrap(await q); },
     conversation: async (id) => unwrap(await db.from("conversations").select("id,user_a,user_b,updated_at,a:profiles!conversations_user_a_fkey(id,username,display_name,avatar_path),b:profiles!conversations_user_b_fkey(id,username,display_name,avatar_path)").eq("id", id).single()),
     startChat: async (userId) => unwrap(await db.rpc("start_chat", { target: userId })),
-    messages: async (conversationId, beforeId) => { let q = db.from("messages").select("id,sender_id,body,image_path,reply_to,created_at,client_id").eq("conversation_id", conversationId).order("id", { ascending: false }).limit(30); if (beforeId) q = q.lt("id", beforeId); const rows = unwrap(await q); return withReplies(db, rows); },
+    messages: async (conversationId, beforeId) => { let q = db.from("messages").select("id,conversation_id,sender_id,body,image_path,media_path,media_type,media_once,media_opened_at,reply_to,created_at,client_id").eq("conversation_id", conversationId).order("id", { ascending: false }).limit(30); if (beforeId) q = q.lt("id", beforeId); const rows = unwrap(await q); return withReplies(db, rows); },
     liveFeed: async () => unwrap(await db.rpc("live_feed")),
     liveStream: async (id) => unwrap(await db.rpc("live_stream", { target: id })),
     joinLive: async (id) => unwrap(await db.rpc("join_live", { target: id })),
     startLive: async (title, providers) => unwrap(await db.rpc("start_live", { title_value: title, agora_available: providers.agoraAvailable, livekit_available: providers.livekitAvailable })),
     endLive: async (id) => unwrap(await db.rpc("end_live", { target: id })),
-    async sendMessage(conversationId, body, requestId, imagePath = null, replyTo = null) { let id; try { id = unwrap(await db.rpc("send_message", { target: conversationId, body_value: body, request_id: requestId, image_value: imagePath, reply_value: replyTo })); } catch (e) { if (String(e?.message || e).includes("image_value") || String(e?.message || e).includes("reply_value")) { id = unwrap(await db.rpc("send_message", { target: conversationId, body_value: body, request_id: requestId })); } else throw e; } const row = unwrap(await db.from("messages").select("id,sender_id,body,image_path,reply_to,created_at,client_id").eq("id", id).single()); const [full] = await withReplies(db, [row]); return full || row; },
+    async sendMessage(conversationId, body, requestId, mediaPath = null, mediaType = null, viewOnce = false, replyTo = null) { const id = unwrap(await db.rpc("send_message", { target: conversationId, body_value: body, request_id: requestId, media_value: mediaPath, media_type_value: mediaType, media_once_value: viewOnce, reply_value: replyTo })); const row = unwrap(await db.from("messages").select("id,conversation_id,sender_id,body,image_path,media_path,media_type,media_once,media_opened_at,reply_to,created_at,client_id").eq("id", id).single()); const [full] = await withReplies(db, [row]); return full || row; },
+    openOnceMedia: async (messageId) => unwrap(await db.rpc("open_once_media", { target: messageId })),
+    finishOnceMedia: async (messageId) => unwrap(await db.rpc("finish_once_media", { target: messageId })),
   };
 }

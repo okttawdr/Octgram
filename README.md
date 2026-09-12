@@ -1,8 +1,8 @@
 # Octgram
 
 Octgram adalah aplikasi sosial foto berbasis React/Vite, Node.js API, dan
-Supabase. Foto post diunggah langsung ke Cloudinary; avatar tetap memakai
-Supabase Storage. Live memakai Agora RTC+RTM sebagai utama dan LiveKit sebagai
+Supabase. Foto post diunggah langsung ke Cloudinary. Avatar dan media DM sekali
+lihat memakai Supabase Storage. Live memakai Agora RTC+RTM sebagai utama dan LiveKit sebagai
 cadangan. Panggilan 1-on-1 memakai WebRTC, Supabase Realtime, dan TURN Metered.
 
 ## Mulai
@@ -26,9 +26,8 @@ npm run verify
 ## Supabase
 
 - Project baru dan kosong: jalankan hanya `supabase/schema.sql`.
-- Project Octgram lama berbasis migration 001: backup, lalu jalankan
-  `002_harden_existing.sql` → `003_livestream.sql` →
-  `004_grid_and_caps.sql` → `005_agora_streaming.sql`.
+- Project Octgram lama berbasis migration 001: backup, lalu jalankan seluruh
+  file `supabase/upgrades/002` sampai `011` secara berurutan.
 - Jika beberapa upgrade sudah pernah berhasil, lanjutkan dari nomor berikutnya;
   jangan menjalankan `schema.sql` pada database lama.
 
@@ -53,4 +52,4 @@ variable `VITE_*`, `public/config.js`, Git, maupun ZIP. Webhook Agora wajib
 memiliki signature secret agar diproses.
 
 Dokumen tambahan: `AGORA.md`, `LIVESTREAM.md`, `CLOUDINARY.md`,
-`GOOGLE-AUTH.md`, `ARSITEKTUR.md`, dan `TESTING.md`.
+`GOOGLE-AUTH.md`, `ARSITEKTUR.md`, `DEPLOY-PERBAIKAN-2.1.md`, dan `TESTING.md`.

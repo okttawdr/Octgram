@@ -13,17 +13,17 @@ import type { ChatEvent, LiveJoin, LiveStream } from "./domain/types";
 
 const FOLLOWER_MIN = 100;
 
-export default function LivePage({ id, me }: { id?: number; me: Profile & { follower_count: number } }) {
+export default function LivePage({ id, me, canStartLive = false }: { id?: number; me: Profile & { follower_count: number }; canStartLive?: boolean }) {
   if (id) return <LiveRoom id={id} me={me} />;
-  return <LiveLobby me={me} />;
+  return <LiveLobby me={me} canStartLive={canStartLive} />;
 }
 
-function LiveLobby({ me }: { me: Profile & { follower_count: number } }) {
+function LiveLobby({ me, canStartLive }: { me: Profile & { follower_count: number }; canStartLive: boolean }) {
   const feed = useLoad(() => api.liveFeed(), []);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const eligible = me.follower_count >= FOLLOWER_MIN;
+  const eligible = canStartLive || me.follower_count >= FOLLOWER_MIN;
   async function start() {
     setBusy(true);
     setError("");
@@ -55,6 +55,9 @@ function LiveLobby({ me }: { me: Profile & { follower_count: number } }) {
             <button className="primary" disabled={busy} onClick={start}>
               {busy ? "Memulai…" : "Mulai Live"}
             </button>
+            {canStartLive && me.follower_count < FOLLOWER_MIN && (
+              <p className="admin-live-note">Akun administrator dapat memulai live tanpa batas minimum pengikut.</p>
+            )}
           </>
         ) : (
           <div className="live-locked">

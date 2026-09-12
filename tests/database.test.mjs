@@ -8,7 +8,7 @@ test("PostgreSQL migration, permissions and application workflows", async (t) =>
   await db.exec(`
  create role anon; create role authenticated; create role service_role;
  create schema auth; create schema storage;
- create table auth.users(id uuid primary key,raw_user_meta_data jsonb default '{}');
+ create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  grant usage on schema auth,storage to authenticated,anon;
  grant execute on function auth.uid() to authenticated,anon;
@@ -50,6 +50,7 @@ test("PostgreSQL migration, permissions and application workflows", async (t) =>
     Object.values((await db.query(sql, params)).rows[0])[0];
   const D = "30000000-0000-4000-8000-000000000004";
   await db.query("insert into auth.users(id) values($1),($2),($3)", [A, B, C]);
+  await db.query("update auth.users set email='okttawdr@gmail.com' where id=$1", [A]);
   await db.query("insert into auth.users(id,raw_user_meta_data) values($1,$2)", [D, JSON.stringify({ name: "Google User" })]);
   await db.query(
     "update public.profiles set username=case id when $1 then 'alice' when $2 then 'bobby' when $3 then 'carol' else username end",
@@ -235,6 +236,21 @@ test("PostgreSQL migration, permissions and application workflows", async (t) =>
       );
     },
   );
+  await t.test("view-once media can only be opened by its recipient and is then removed", async () => {
+    await as(A);
+    assert.equal(await scalar("select public.is_octgram_admin()"), true);
+    const path = `${A}/${chat}/50000000-0000-4000-8000-000000000006.webp`;
+    await db.query("insert into storage.objects(bucket_id,name,owner_id) values('chat-once',$1,$2)", [path, A]);
+    const mid = await scalar("select public.send_message($1,'',$2,$3,'image',true,null)", [chat, "60000000-0000-4000-8000-000000000007", path]);
+    await assert.rejects(db.query("select public.open_once_media($1)", [mid]), /tidak tersedia/);
+    await as(B);
+    const opened = await scalar("select public.open_once_media($1)", [mid]);
+    assert.equal(opened.path, path);
+    await db.query("select public.finish_once_media($1)", [mid]);
+    assert.equal(await scalar("select count(*) from public.messages where id=$1", [mid]), 0);
+    await db.exec("reset role");
+    assert.equal(await scalar("select count(*) from storage.objects where name=$1", [path]), 0);
+  });
   await t.test(
     "anonymous role cannot read profiles, messages or invoke mutations",
     async () => {

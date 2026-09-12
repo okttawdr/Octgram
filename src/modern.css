@@ -50,8 +50,8 @@
   --shadow-xs: 0 1px 2px rgba(23, 20, 26, 0.06);
   --shadow-soft: 0 8px 28px rgba(26, 16, 32, 0.08), 0 2px 8px rgba(26, 16, 32, 0.05);
   --shadow-card: 0 12px 40px rgba(26, 16, 32, 0.1), 0 2px 10px rgba(26, 16, 32, 0.06);
-  --shadow-lift: 0 20px 60px rgba(225, 77, 26, 0.16), 0 8px 24px rgba(26, 16, 32, 0.12);
-  --shadow-glow: 0 8px 32px rgba(225, 77, 26, 0.32);
+  --shadow-lift: 0 20px 60px rgba(31, 111, 235, 0.16), 0 8px 24px rgba(14, 27, 51, 0.12);
+  --shadow-glow: 0 8px 32px rgba(31, 111, 235, 0.32);
 
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -212,9 +212,9 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
   background: linear-gradient(135deg, var(--tint), #fff) !important;
   color: var(--accent-3) !important;
   font-weight: 800 !important;
-  box-shadow: var(--shadow-xs), inset 0 0 0 1px #e14d1a22 !important;
+  box-shadow: var(--shadow-xs), inset 0 0 0 1px #1f6feb22 !important;
 }
-[data-theme="dark"] .nav-item.active { background: linear-gradient(135deg, #2d1b12, #241511) !important; color: #ffb25e !important; }
+[data-theme="dark"] .nav-item.active { background: linear-gradient(135deg, #16294f, #10203f) !important; color: #8fbdff !important; }
 .nav-item.active::before {
   content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px;
   border-radius: 99px; background: var(--gradient-accent);
@@ -305,7 +305,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
 .post-actions button.bare:hover { background: var(--tint-2) !important; border-color: var(--line) !important; transform: translateY(-1px) scale(1.04) !important; }
 .post-actions .liked { color: var(--rose) !important; background:#fff0f3 !important; border-color:#ffd4de !important; }
 [data-theme="dark"] .post-actions .liked { background:#2d1218 !important; border-color:#5b2230 !important; }
-.save-action.saved { color: var(--accent-3) !important; background: var(--tint) !important; border-color:#f3c9ae !important; }
+.save-action.saved { color: var(--accent-3) !important; background: var(--tint) !important; border-color:#bcd3f7 !important; }
 @keyframes pop { 0%{transform:scale(.6)} 55%{transform:scale(1.28)} 100%{transform:scale(1)} }
 .liked svg, .saved svg { animation: pop .35s var(--ease-spring); }
 .dots button.active { background: var(--accent) !important; width:18px !important; border-radius:99px !important; transition: all .25s var(--ease); }
@@ -317,7 +317,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
 /* ---------- Right rail / comments / empty ---------- */
 .right-rail { position: sticky; top: 24px; align-self: start; }
 .rail-card {
-  background: linear-gradient(160deg, #1d0f2e 0%, #4c1d95 35%, #c2410c 78%, #f59e0b 115%) !important;
+  background: linear-gradient(160deg, #071a3d 0%, #0b3d91 38%, #1f6feb 75%, #5aa2ff 115%) !important;
   border: 0 !important; color: #fff !important;
   border-radius: var(--radius-lg) !important;
   box-shadow: var(--shadow-lift) !important;
@@ -326,10 +326,10 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
 .rail-card::before, .rail-card::after { content:""; position:absolute; border-radius:50%; filter: blur(2px); }
 .rail-card::before { width:220px; height:220px; right:-70px; top:-70px; background: radial-gradient(circle, #ffffff2e, transparent 70%); }
 .rail-card::after { width:160px; height:160px; left:-50px; bottom:-50px; background: radial-gradient(circle, #0000002a, transparent 70%); }
-.rail-card .eyebrow { color:#fed7aa !important; }
-.rail-card .eyebrow::before { background:#fed7aa; }
+.rail-card .eyebrow { color:#dbeafe !important; }
+.rail-card .eyebrow::before { background:#dbeafe; }
 .rail-card h2 { color:#fff !important; font-size:1.42rem !important; line-height:1.28 !important; letter-spacing:-.6px !important; }
-.rail-card p { color:#ffedd5 !important; }
+.rail-card p { color:#eaf2ff !important; }
 .rail-card button { border-radius: 14px !important; font-weight:800 !important; }
 .rail-footer { background: var(--surface); border:1px solid var(--line); border-radius: var(--radius-md); padding:18px; box-shadow: var(--shadow-soft); }
 .comments { border-top: 1px dashed var(--line) !important; }
@@ -340,7 +340,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
 .loading { font-weight:600; }
 .spin { color: var(--accent); }
 .error { border-radius: var(--radius-md) !important; box-shadow: var(--shadow-xs); }
-.success { border-radius: var(--radius-md) !important; border:1px solid #f3c9ae; }
+.success { border-radius: var(--radius-md) !important; border:1px solid #bcd3f7; }
 .end-feed { position:relative; }
 .end-feed::before { content:""; display:block; width:64px; height:4px; margin:0 auto 12px; border-radius:99px; background: var(--gradient-accent); opacity:.7; }
 .load-more { border-radius: 14px !important; }
@@ -534,7 +534,7 @@ progress::-webkit-progress-value { background: var(--gradient-accent); border-ra
 .action-menu { position: absolute; top: calc(100% + 10px); right: 0; z-index: 90; min-width: 200px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-lift); padding: 6px; backdrop-filter: blur(14px); }
 [data-theme="dark"] .action-menu { background: linear-gradient(180deg, #101a3a, #0b1326); }
 .action-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: var(--radius-md); border: 0; background: transparent; color: var(--text); font-size: .9rem; cursor: pointer; text-align: left; transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease); font-weight: 600; }
-.action-menu-item:hover { background: var(--tint) !important; color: var(--tint-3) !important; }
+.action-menu-item:hover { background: var(--tint) !important; color: var(--accent-3) !important; }
 .action-menu-item.accent { color: var(--accent) !important; }
 .action-menu-item.accent:hover { background: var(--tint) !important; }
 .action-menu-item.soft { color: var(--text-2) !important; }
@@ -633,5 +633,3 @@ progress::-webkit-progress-value { background: var(--gradient-accent); border-ra
 .skeleton { position:relative; overflow:hidden; background: var(--line-soft); border-radius:12px; min-height:18px; }
 .skeleton::after { content:""; position:absolute; inset:0; background: linear-gradient(100deg, transparent 30%, #ffffff88 50%, transparent 70%); animation: shimmer 1.4s infinite; }
 @keyframes shimmer { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
-
-

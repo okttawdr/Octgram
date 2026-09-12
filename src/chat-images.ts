@@ -1,3 +1,5 @@
+import { db } from "./lib";
+
 // Kompresi HEAVY khusus gambar chat: target jauh lebih kecil dari foto post.
 // Post memakai budget ~1 MB; chat memakai budget ~350 KB + edge maksimal 1080
 // agar terkirim cepat di HP dan hemat kredit Cloudinary.
@@ -82,4 +84,19 @@ export function uploadChatImage(
     xhr.onerror = () => reject(new Error("Jaringan terputus. Coba lagi."));
     xhr.send(form);
   });
+}
+
+export async function prepareOnceMedia(file: File): Promise<{ blob: Blob; type: "image" | "video"; extension: "webp" | "mp4" | "webm" }> {
+  if (file.type.startsWith("image/")) {
+    const packed = await compressChatImage(file);
+    return { blob: packed.blob, type: "image", extension: "webp" };
+  }
+  if (!new Set(["video/mp4", "video/webm"]).has(file.type)) throw new Error("Gunakan foto JPG, PNG, WebP, atau video MP4/WebM.");
+  if (file.size > 25 * 1024 * 1024) throw new Error("Ukuran video sekali lihat maksimal 25 MB.");
+  return { blob: file, type: "video", extension: file.type === "video/webm" ? "webm" : "mp4" };
+}
+
+export async function uploadOnceMedia(path: string, blob: Blob, contentType: string): Promise<void> {
+  const { error } = await db.storage.from("chat-once").upload(path, blob, { cacheControl: "0", contentType, upsert: false });
+  if (error) throw error;
 }

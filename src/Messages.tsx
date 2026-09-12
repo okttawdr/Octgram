@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, RefreshCw, Search, Phone, ImagePlus, Smile, X, Reply, Expand } from "lucide-react";
+import { ArrowLeft, Send, RefreshCw, Search, Phone, ImagePlus, Smile, X, Reply, Eye, Play, ShieldCheck } from "lucide-react";
 import { db, go, date, errorText, formatBytes, mediaUrl, type Profile } from "./lib";
 import { api } from "./services/api";
 import { useLoad } from "./hooks";
 import { Avatar, Loading, ErrorBox, Empty, RichText } from "./ui";
 import type { Conversation, Message } from "./domain/types";
-import { compressChatImage, uploadChatImage } from "./chat-images";
+import { prepareOnceMedia, uploadOnceMedia } from "./chat-images";
 import { EmojiPicker, QUICK_EMOJIS } from "./emoji";
 export default function Messages({
   uid,
@@ -158,9 +158,9 @@ function Chat({
   const live = useRef(true);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
-  const [imgPreview, setImgPreview] = useState<{ url: string; file: File } | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{ url: string; blob: Blob; type: "image" | "video"; extension: "webp" | "mp4" | "webm"; name: string } | null>(null);
   const [imgProgress, setImgProgress] = useState(0);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ id: number; url: string; type: "image" | "video"; ephemeral: boolean } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const swipeX = useRef<{ id: number; x: number } | null>(null);
@@ -216,6 +216,10 @@ function Chat({
               merge([payload.new as Message]);
           },
         )
+        .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: "conversation_id=eq." + conversation.id }, (payload) => {
+          const removed = Number((payload.old as { id?: number }).id);
+          if (removed) setMessages((old) => old.filter((message) => message.id !== removed));
+        })
         .subscribe((status) => {
           if (live.current && token === epoch) {
             setConnected(status === "SUBSCRIBED");
@@ -253,15 +257,13 @@ function Chat({
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages.at(-1)?.id]);
-  async function pickImage(files: FileList | null) {
+  async function pickMedia(files: FileList | null) {
     if (!files?.length) return;
     const file = files[0];
     try {
-      const packed = await compressChatImage(file);
-      if (imgPreview) URL.revokeObjectURL(imgPreview.url);
-      // Simpan sebagai File agar mudah diunggah ulang; ukuran sudah dipadatkan berat.
-      const compacted = new File([packed.blob], file.name.replace(/\.[a-z]+$/i, "") + ".webp", { type: "image/webp" });
-      setImgPreview({ url: URL.createObjectURL(packed.blob), file: compacted });
+      const packed = await prepareOnceMedia(file);
+      if (mediaPreview) URL.revokeObjectURL(mediaPreview.url);
+      setMediaPreview({ ...packed, url: URL.createObjectURL(packed.blob), name: file.name });
       setShowEmoji(false);
       inputRef.current?.focus();
     } catch (e) {
@@ -272,38 +274,53 @@ function Chat({
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const text = body.trim();
-    if (!text && !imgPreview) return;
+    if (!text && !mediaPreview) return;
     setBusy(true);
     setError("");
     if (request.current?.body !== text)
-      request.current = { id: crypto.randomUUID(), body: text || "(gambar)" };
+      request.current = { id: crypto.randomUUID(), body: text || "(media sekali lihat)" };
+    let uploadedPath: string | null = null;
     try {
-      let imagePath: string | null = null;
-      if (imgPreview) {
-        // Kompresi sudah dilakukan saat pilih; unggah ke folder khusus chat.
-        const sign = await api.signUpload(crypto.randomUUID().replace(/-/g, "").slice(0, 12), "chat");
-        const fullId = `${sign.folder}/${sign.publicId}`;
-        setImgProgress(1);
-        const done = await uploadChatImage(sign, imgPreview.file, setImgProgress);
-        void done;
-        imagePath = fullId;
+      if (mediaPreview) {
+        uploadedPath = `${uid}/${conversation.id}/${crypto.randomUUID()}.${mediaPreview.extension}`;
+        setImgProgress(15);
+        await uploadOnceMedia(uploadedPath, mediaPreview.blob, mediaPreview.type === "image" ? "image/webp" : mediaPreview.blob.type);
+        setImgProgress(100);
       }
-      const row = await api.sendMessage(conversation.id, text, request.current!.id, imagePath ? { imagePath, replyTo: replyTo?.id ?? null } : { replyTo: replyTo?.id ?? null }) as Message;
+      const row = await api.sendMessage(conversation.id, text, request.current!.id, uploadedPath ? { mediaPath: uploadedPath, mediaType: mediaPreview!.type, viewOnce: true, replyTo: replyTo?.id ?? null } : { replyTo: replyTo?.id ?? null }) as Message;
       if (live.current) {
         merge([row]);
         setBody("");
         setReplyTo(null);
-        if (imgPreview) URL.revokeObjectURL(imgPreview.url);
-        setImgPreview(null);
+        if (mediaPreview) URL.revokeObjectURL(mediaPreview.url);
+        setMediaPreview(null);
         setImgProgress(0);
         setShowEmoji(false);
         request.current = null;
       }
     } catch (e) {
+      if (uploadedPath) void db.storage.from("chat-once").remove([uploadedPath]);
       if (live.current) setError(errorText(e));
     } finally {
       if (live.current) setBusy(false);
     }
+  }
+  async function openOnce(message: Message) {
+    if (!message.media_path || message.sender_id === uid) return;
+    setError("");
+    try {
+      const media = await api.openOnceMedia(message.id);
+      const { data, error } = await db.storage.from("chat-once").createSignedUrl(media.path, 120);
+      if (error || !data?.signedUrl) throw error || new Error("Media tidak dapat dibuka.");
+      setLightbox({ id: message.id, url: data.signedUrl, type: media.type, ephemeral: true });
+    } catch (e) { setError(errorText(e)); }
+  }
+  async function closeViewer() {
+    const current = lightbox;
+    setLightbox(null);
+    if (!current?.ephemeral) return;
+    setMessages((old) => old.filter((message) => message.id !== current.id));
+    try { await api.finishOnceMedia(current.id); } catch (e) { setError(errorText(e)); void load(); }
   }
   return (
     <>
@@ -354,7 +371,7 @@ function Chat({
         )}
         {messages.map((m) => {
           const mine = m.sender_id === uid;
-          const img = m.image_path ? mediaUrl(m.image_path, 800) : null;
+          const legacyImg = m.image_path ? mediaUrl(m.image_path, 800) : null;
           return (
             <div
               className={"message-row " + (mine ? "mine" : "theirs")}
@@ -401,20 +418,24 @@ function Chat({
                   >
                     <span className="msg-quote-bar" />
                     <span className="msg-quote-text">
-                      {m.reply.image_path && !m.reply.body ? "📷 Gambar" : (m.reply.body || "📷 Gambar").slice(0, 120)}
+                      {(m.reply.image_path || m.reply.media_once) && !m.reply.body ? (m.reply.media_type === "video" ? "▶ Video sekali lihat" : "◉ Foto sekali lihat") : (m.reply.body || "Media").slice(0, 120)}
                     </span>
                   </span>
                 )}
-                {img && (
+                {legacyImg && (
                   <button
                     className="bare msg-image"
-                    onClick={() => setLightbox(img)}
+                    onClick={() => setLightbox({ id: m.id, url: legacyImg, type: "image", ephemeral: false })}
                     aria-label="Perbesar gambar"
                   >
-                    <img src={img} alt="Lampiran chat" loading="lazy" />
-                    <span className="msg-zoom">
-                      <Expand size={13} />
-                    </span>
+                    <img src={legacyImg} alt="Lampiran chat lama" loading="lazy" />
+                  </button>
+                )}
+                {m.media_path && m.media_once && (
+                  <button className={`bare once-media ${mine ? "sent" : "received"}`} disabled={mine} onClick={() => void openOnce(m)}>
+                    <span className="once-media-icon">{m.media_type === "video" ? <Play size={18} fill="currentColor" /> : <Eye size={19} />}</span>
+                    <span><strong>{m.media_type === "video" ? "Video sekali lihat" : "Foto sekali lihat"}</strong><small>{mine ? "Terkirim secara privat" : "Ketuk untuk melihat"}</small></span>
+                    <ShieldCheck size={15} />
                   </button>
                 )}
                 {m.body ? (
@@ -437,25 +458,25 @@ function Chat({
           </span>
           <span className="reply-bar-text">
             <b>Membalas {replyTo.sender_id === uid ? "diri sendiri" : peer.display_name || peer.username}</b>
-            <small>{replyTo.image_path && !replyTo.body ? "📷 Gambar" : (replyTo.body || "📷 Gambar").slice(0, 100)}</small>
+            <small>{(replyTo.image_path || replyTo.media_once) && !replyTo.body ? (replyTo.media_type === "video" ? "Video sekali lihat" : "Foto sekali lihat") : (replyTo.body || "Media").slice(0, 100)}</small>
           </span>
           <button className="bare" aria-label="Batal balas" onClick={() => setReplyTo(null)}>
             <X size={16} />
           </button>
         </div>
       )}
-      {imgPreview && (
+      {mediaPreview && (
         <div className="img-preview-bar">
-          <img src={imgPreview.url} alt="Pratinjau gambar" />
+          {mediaPreview.type === "image" ? <img src={mediaPreview.url} alt="Pratinjau foto" /> : <video src={mediaPreview.url} muted playsInline />}
           <span>
-            <b>Gambar siap dikirim</b>
+            <b>{mediaPreview.type === "image" ? "Foto" : "Video"} sekali lihat</b>
             <small>
-              {formatBytes(imgPreview.file.size)} · WebP padat
+              {formatBytes(mediaPreview.blob.size)} · akan hilang setelah dilihat
               {imgProgress > 0 && busy ? ` · ${imgProgress}%` : ""}
             </small>
             {busy && imgProgress > 0 && <progress value={imgProgress} max={100} />}
           </span>
-          <button className="bare" aria-label="Hapus gambar" disabled={busy} onClick={() => { URL.revokeObjectURL(imgPreview.url); setImgPreview(null); setImgProgress(0); }}>
+          <button className="bare" aria-label="Hapus media" disabled={busy} onClick={() => { URL.revokeObjectURL(mediaPreview.url); setMediaPreview(null); setImgProgress(0); }}>
             <X size={16} />
           </button>
         </div>
@@ -467,12 +488,12 @@ function Chat({
         />
       )}
       <form className="chat-form chat-form-pro" onSubmit={send}>
-        <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { void pickImage(e.target.files); e.target.value = ""; }} />
+        <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" hidden onChange={(e) => { void pickMedia(e.target.files); e.target.value = ""; }} />
         <button
           type="button"
           className="icon-btn"
-          aria-label="Kirim gambar"
-          title="Kirim gambar"
+          aria-label="Kirim media sekali lihat"
+          title="Foto atau video sekali lihat"
           disabled={busy}
           onClick={() => fileInput.current?.click()}
         >
@@ -499,20 +520,19 @@ function Chat({
         <button
           className="primary"
           aria-label="Kirim pesan"
-          disabled={busy || (!body.trim() && !imgPreview)}
+          disabled={busy || (!body.trim() && !mediaPreview)}
         >
           <Send size={19} />
         </button>
       </form>
       {lightbox && (
-        <div className="lightbox" role="dialog" aria-label="Pratinjau gambar" onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="Gambar chat diperbesar" onClick={(e) => e.stopPropagation()} />
-          <button className="bare lightbox-close" aria-label="Tutup" onClick={() => setLightbox(null)}>
+        <div className="lightbox once-viewer" role="dialog" aria-modal aria-label="Media sekali lihat" onClick={() => void closeViewer()}>
+          {lightbox.type === "image" ? <img src={lightbox.url} alt="Media sekali lihat" onClick={(e) => e.stopPropagation()} /> : <video src={lightbox.url} controls autoPlay playsInline onEnded={() => void closeViewer()} onClick={(e) => e.stopPropagation()} />}
+          {lightbox.ephemeral && <div className="once-viewer-label"><Eye size={16} /> Sekali lihat</div>}
+          <button className="bare lightbox-close" aria-label="Selesai melihat" onClick={(e) => { e.stopPropagation(); void closeViewer(); }}>
             <X size={20} />
           </button>
-          <a className="lightbox-open" href={lightbox} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-            Buka penuh
-          </a>
+          {lightbox.ephemeral && <p className="once-viewer-help">Ketuk tutup setelah selesai. Media akan dihapus permanen.</p>}
         </div>
       )}
     </>

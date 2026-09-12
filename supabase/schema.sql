@@ -100,15 +100,22 @@ create table public.messages (
  id bigint generated always as identity primary key,
  conversation_id uuid not null references public.conversations(id) on delete cascade,
  sender_id uuid not null references public.profiles(id) on delete cascade,
- body text not null default '' check((char_length(trim(body)) between 1 and 2000) or (body = '' and image_path is not null)),
+ body text not null default '',
  client_id uuid not null,
  image_path text,
+ media_path text,
+ media_type text check(media_type in ('image','video')),
+ media_once boolean not null default false,
+ media_opened_at timestamptz,
  reply_to bigint references public.messages(id) on delete set null,
  created_at timestamptz not null default now(),
- unique(sender_id,client_id)
+ unique(sender_id,client_id),
+ check((char_length(trim(body)) between 1 and 2000) or (body='' and image_path is not null) or (body='' and media_path is not null and media_type is not null and media_once)),
+ check((media_path is null and media_type is null and not media_once and media_opened_at is null) or (media_path is not null and media_type is not null and media_once))
 );
 create index messages_conversation on public.messages(conversation_id,id desc);
 create index messages_reply on public.messages(reply_to);
+create unique index messages_once_media_path on public.messages(media_path) where media_path is not null;
 create table public.rate_buckets (
  user_id uuid not null references public.profiles(id) on delete cascade,
  action text not null,
@@ -250,7 +257,7 @@ begin
  insert into public.conversations(user_a,user_b) values(least(auth.uid(),target),greatest(auth.uid(),target)) on conflict(user_a,user_b) do update set user_a=excluded.user_a returning id into cid; return cid;
 end $$;
 drop function if exists public.send_message(uuid,text,uuid);
-create or replace function public.send_message(target uuid,body_value text,request_id uuid,image_value text default null,reply_value bigint default null) returns bigint language plpgsql security definer set search_path='' as $$
+create or replace function public.send_message(target uuid,body_value text,request_id uuid,media_value text default null,media_type_value text default null,media_once_value boolean default false,reply_value bigint default null) returns bigint language plpgsql security definer set search_path='' as $$
 declare mid bigint;
 begin
  if auth.uid() is null or not exists(select 1 from public.conversations where id=target and auth.uid() in(user_a,user_b)) then raise exception 'Percakapan tidak tersedia'; end if;
@@ -258,16 +265,35 @@ begin
  perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text||request_id::text,0));
  select id into mid from public.messages where sender_id=auth.uid() and client_id=request_id; if mid is not null then return mid; end if;
  body_value := coalesce(trim(body_value),'');
- image_value := nullif(trim(coalesce(image_value,'')),'');
- if body_value = '' and image_value is null then raise exception 'Tulis pesan atau pilih gambar.'; end if;
+ media_value := nullif(trim(coalesce(media_value,'')),'');
+ media_type_value := nullif(trim(coalesce(media_type_value,'')),'');
+ if body_value = '' and media_value is null then raise exception 'Tulis pesan atau pilih media sekali lihat.'; end if;
  if char_length(body_value) > 2000 then raise exception 'Pesan maksimal 2000 karakter.'; end if;
- if image_value is not null then
-   if char_length(image_value) > 200 or image_value not like 'octgram/chat/'||auth.uid()::text||'\_%' escape '\' then raise exception 'Gambar belum terunggah. Unggah ulang gambarnya.'; end if;
+ if media_value is not null then
+   if not media_once_value or media_type_value not in ('image','video') or media_value not like auth.uid()::text||'/'||target::text||'/%' then raise exception 'Media sekali lihat tidak valid.'; end if;
+   if not exists(select 1 from storage.objects where bucket_id='chat-once' and name=media_value and owner_id=auth.uid()::text) then raise exception 'Media belum terunggah ke Supabase.'; end if;
+ elsif media_type_value is not null or media_once_value then raise exception 'Data media tidak lengkap.';
  end if;
  if reply_value is not null and not exists(select 1 from public.messages where id=reply_value and conversation_id=target) then raise exception 'Pesan yang dibalas tidak ditemukan.'; end if;
  perform public.check_rate('message',120,3600);
- insert into public.messages(conversation_id,sender_id,body,client_id,image_path,reply_to) values(target,auth.uid(),body_value,request_id,image_value,reply_value) returning id into mid;
+ insert into public.messages(conversation_id,sender_id,body,client_id,media_path,media_type,media_once,reply_to) values(target,auth.uid(),body_value,request_id,media_value,media_type_value,media_once_value,reply_value) returning id into mid;
  update public.conversations set updated_at=now() where id=target; return mid;
+end $$;
+create or replace function public.open_once_media(target bigint) returns jsonb language plpgsql security definer set search_path='' as $$
+declare row public.messages;
+begin
+ select m.* into row from public.messages m join public.conversations c on c.id=m.conversation_id where m.id=target and m.media_once and m.media_path is not null and auth.uid() in(c.user_a,c.user_b) and m.sender_id<>auth.uid() for update of m;
+ if row.id is null then raise exception 'Media tidak tersedia atau sudah dihapus.'; end if;
+ update public.messages set media_opened_at=coalesce(media_opened_at,now()) where id=target;
+ return jsonb_build_object('path',row.media_path,'type',row.media_type);
+end $$;
+create or replace function public.finish_once_media(target bigint) returns void language plpgsql security definer set search_path='' as $$
+declare row public.messages;
+begin
+ select m.* into row from public.messages m join public.conversations c on c.id=m.conversation_id where m.id=target and m.media_once and m.media_path is not null and m.media_opened_at is not null and auth.uid() in(c.user_a,c.user_b) and m.sender_id<>auth.uid() for update of m;
+ if row.id is null then raise exception 'Media tidak tersedia atau belum dibuka.'; end if;
+ delete from public.messages where id=target;
+ delete from storage.objects where bucket_id='chat-once' and name=row.media_path;
 end $$;
 create or replace function public.feed(before_id bigint default null,author_id uuid default null) returns jsonb language sql stable security invoker set search_path='' as $$
  select coalesce(jsonb_agg(jsonb_build_object('id',p.id,'user_id',p.user_id,'caption',p.caption,'media',p.media,'thumbnail_index',p.thumbnail_index,'created_at',p.created_at,'updated_at',p.updated_at,'archived',p.archived,'author',jsonb_build_object('id',pr.id,'username',pr.username,'display_name',pr.display_name,'avatar_path',pr.avatar_path),'collaborators',coalesce((select jsonb_agg(jsonb_build_object('id',cp.id,'username',cp.username,'display_name',cp.display_name,'avatar_path',cp.avatar_path)) from public.post_collabs pc join public.profiles cp on cp.id=pc.user_id where pc.post_id=p.id),'[]'::jsonb),'like_count',(select count(*) from public.likes l where l.post_id=p.id),'comment_count',(select count(*) from public.comments c where c.post_id=p.id),'repost_count',(select count(*) from public.reposts r where r.post_id=p.id),'liked',exists(select 1 from public.likes l where l.post_id=p.id and l.user_id=auth.uid()),'bookmarked',exists(select 1 from public.bookmarks b where b.post_id=p.id and b.user_id=auth.uid()),'reposted',exists(select 1 from public.reposts r where r.post_id=p.id and r.user_id=auth.uid())) order by p.id desc),'[]'::jsonb)
@@ -333,6 +359,10 @@ create or replace function public.post_likes(target bigint,before_time timestamp
  from (select * from public.likes where post_id=target and (before_time is null or created_at<before_time) order by created_at desc limit 30) l
  join public.profiles pr on pr.id=l.user_id;
 $$;
+create or replace function public.post_reposters(target bigint) returns jsonb language sql stable security invoker set search_path='' as $$
+ select coalesce(jsonb_agg(jsonb_build_object('user',jsonb_build_object('id',pr.id,'username',pr.username,'display_name',pr.display_name,'avatar_path',pr.avatar_path),'created_at',r.created_at) order by r.created_at desc),'[]'::jsonb)
+ from (select * from public.reposts where post_id=target order by created_at desc limit 8) r join public.profiles pr on pr.id=r.user_id;
+$$;
 
 create or replace function public.follow_list(target uuid,kind_value text,before_time timestamptz default null) returns jsonb language sql stable security invoker set search_path='' as $$  select coalesce(jsonb_agg(jsonb_build_object('user',jsonb_build_object('id',pr.id,'username',pr.username,'display_name',pr.display_name,'avatar_path',pr.avatar_path),'created_at',f.created_at) order by f.created_at desc),'[]'::jsonb)
   from (
@@ -342,11 +372,13 @@ create or replace function public.follow_list(target uuid,kind_value text,before
      select f3.following_id as user_id,f3.created_at from public.follows f3 where f3.follower_id=target and kind_value='following' and (before_time is null or f3.created_at<before_time)
     ) combined order by created_at desc limit 30
   ) f join public.profiles pr on pr.id=f.user_id;$$;
+create or replace function public.is_octgram_admin() returns boolean language sql stable security definer set search_path='' as $$
+ select exists(select 1 from auth.users u left join public.profiles p on p.id=u.id where u.id=auth.uid() and (lower(coalesce(u.email,'')) in ('okttawdr@gmail.com','shusensei27@gmail.com') or lower(coalesce(p.username,'')) in ('okta_bringass','octaxyzz_')));
+$$;
 create or replace function public.db_stats() returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare result jsonb;
 begin
- if auth.uid() is null then return '{"allowed":false}'::jsonb; end if;
- if lower(coalesce(current_setting('request.jwt.claim.email',true),'')) not in ('okttawdr@gmail.com','shusensei27@gmail.com') then
+ if auth.uid() is null or not public.is_octgram_admin() then
   return '{"allowed":false}'::jsonb;
  end if;
  select jsonb_build_object(
@@ -371,8 +403,8 @@ begin
  return result;
 end $$;
 
-revoke execute on function public.set_follow(uuid,boolean),public.set_like(bigint,boolean),public.set_bookmark(bigint,boolean),public.publish_post(text,jsonb,uuid,smallint,text),public.edit_post(bigint,text,smallint),public.archive_post(bigint,boolean),public.delete_post(bigint),public.set_repost(bigint,boolean),public.add_comment(bigint,text,bigint),public.start_chat(uuid),public.send_message(uuid,text,uuid,text,bigint),public.feed(bigint,uuid),public.explore_feed(bigint),public.saved_feed(bigint),public.post_view(bigint),public.post_collaborators(bigint),public.post_likes(bigint,timestamptz),public.follow_list(uuid,text,timestamptz),public.db_stats() from public,anon;
-grant execute on function public.set_follow(uuid,boolean),public.set_like(bigint,boolean),public.set_bookmark(bigint,boolean),public.publish_post(text,jsonb,uuid,smallint,text),public.edit_post(bigint,text,smallint),public.archive_post(bigint,boolean),public.delete_post(bigint),public.set_repost(bigint,boolean),public.add_comment(bigint,text,bigint),public.start_chat(uuid),public.send_message(uuid,text,uuid,text,bigint),public.feed(bigint,uuid),public.explore_feed(bigint),public.saved_feed(bigint),public.post_view(bigint),public.post_collaborators(bigint),public.post_likes(bigint,timestamptz),public.follow_list(uuid,text,timestamptz),public.db_stats() to authenticated;
+revoke execute on function public.set_follow(uuid,boolean),public.set_like(bigint,boolean),public.set_bookmark(bigint,boolean),public.publish_post(text,jsonb,uuid,smallint,text),public.edit_post(bigint,text,smallint),public.archive_post(bigint,boolean),public.delete_post(bigint),public.set_repost(bigint,boolean),public.add_comment(bigint,text,bigint),public.start_chat(uuid),public.send_message(uuid,text,uuid,text,text,boolean,bigint),public.open_once_media(bigint),public.finish_once_media(bigint),public.feed(bigint,uuid),public.explore_feed(bigint),public.saved_feed(bigint),public.post_view(bigint),public.post_collaborators(bigint),public.post_likes(bigint,timestamptz),public.post_reposters(bigint),public.follow_list(uuid,text,timestamptz),public.db_stats(),public.is_octgram_admin() from public,anon;
+grant execute on function public.set_follow(uuid,boolean),public.set_like(bigint,boolean),public.set_bookmark(bigint,boolean),public.publish_post(text,jsonb,uuid,smallint,text),public.edit_post(bigint,text,smallint),public.archive_post(bigint,boolean),public.delete_post(bigint),public.set_repost(bigint,boolean),public.add_comment(bigint,text,bigint),public.start_chat(uuid),public.send_message(uuid,text,uuid,text,text,boolean,bigint),public.open_once_media(bigint),public.finish_once_media(bigint),public.feed(bigint,uuid),public.explore_feed(bigint),public.saved_feed(bigint),public.post_view(bigint),public.post_collaborators(bigint),public.post_likes(bigint,timestamptz),public.post_reposters(bigint),public.follow_list(uuid,text,timestamptz),public.db_stats(),public.is_octgram_admin() to authenticated;
 
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) values('photos','photos',true,5242880,array['image/webp']) on conflict(id) do update set public=excluded.public,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
 create or replace function public.storage_capacity() returns boolean language sql stable security definer set search_path='' as $$
@@ -383,6 +415,10 @@ grant execute on function public.storage_capacity() to authenticated;
 create policy octgram_upload on storage.objects for insert to authenticated with check(bucket_id='photos' and (storage.foldername(name))[1]=(select auth.uid())::text and lower(storage.extension(name))='webp' and owner_id=(select auth.uid())::text and (select public.storage_capacity()));
 create policy octgram_own_objects on storage.objects for select to authenticated using(bucket_id='photos' and owner_id=(select auth.uid())::text);
 create policy octgram_remove_unused on storage.objects for delete to authenticated using(bucket_id='photos' and owner_id=(select auth.uid())::text and not exists(select 1 from public.posts p,jsonb_array_elements(p.media) m where m->>'path'=name) and not exists(select 1 from public.profiles p where p.avatar_path=name));
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) values('chat-once','chat-once',false,26214400,array['image/webp','video/mp4','video/webm']) on conflict(id) do update set public=false,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
+create policy chat_once_upload on storage.objects for insert to authenticated with check(bucket_id='chat-once' and owner_id=(select auth.uid())::text and (storage.foldername(name))[1]=(select auth.uid())::text and exists(select 1 from public.conversations c where c.id=((storage.foldername(name))[2])::uuid and (select auth.uid()) in(c.user_a,c.user_b)) and lower(storage.extension(name)) in ('webp','mp4','webm'));
+create policy chat_once_read_receiver on storage.objects for select to authenticated using(bucket_id='chat-once' and exists(select 1 from public.messages m join public.conversations c on c.id=m.conversation_id where m.media_path=name and (select auth.uid()) in(c.user_a,c.user_b) and m.sender_id<>(select auth.uid())));
+create policy chat_once_remove_unsent on storage.objects for delete to authenticated using(bucket_id='chat-once' and owner_id=(select auth.uid())::text and not exists(select 1 from public.messages m where m.media_path=name));
 alter publication supabase_realtime add table public.messages;
 alter publication supabase_realtime add table public.notifications;
 
@@ -410,7 +446,7 @@ declare row public.live_streams;
 begin
   perform public.check_rate('live_start', 3, 3600);
   if (select count(*) from public.follows where following_id=auth.uid()) < 100
-    and lower(coalesce(current_setting('request.jwt.claim.email',true),'')) not in ('okttawdr@gmail.com','shusensei27@gmail.com') then
+    and lower(coalesce(auth.jwt()->>'email',current_setting('request.jwt.claim.email',true),'')) not in ('okttawdr@gmail.com','shusensei27@gmail.com') then
     raise exception 'Butuh minimal 100 pengikut untuk mulai live.' using errcode='42501';
   end if;
   update public.live_streams set status='ended', ended_at=now() where host_id=auth.uid() and status='live';
@@ -481,7 +517,7 @@ returns jsonb language plpgsql security definer set search_path='' as $$
 declare stream_row public.live_streams; month_key text:=to_char(now(),'YYYY-MM'); agora_used numeric:=0; livekit_used numeric:=0; chosen text; minutes_left numeric; allocation integer;
 begin
  if auth.uid() is null then raise exception 'Silakan masuk dahulu.' using errcode='42501'; end if;
- if (select count(*) from public.follows where following_id=auth.uid())<100 and lower(coalesce(current_setting('request.jwt.claim.email',true),'')) not in ('okttawdr@gmail.com','shusensei27@gmail.com') then raise exception 'Butuh minimal 100 pengikut untuk mulai live.' using errcode='42501'; end if;
+ if (select count(*) from public.follows where following_id=auth.uid())<100 and not public.is_octgram_admin() then raise exception 'Butuh minimal 100 pengikut untuk mulai live.' using errcode='42501'; end if;
  perform public.check_rate('live_start',3,3600);
  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('octgram-quota:'||month_key,0));
  select coalesce((select su.minutes_used from public.stream_usage su where su.provider='agora' and su.month=month_key),0) into agora_used;

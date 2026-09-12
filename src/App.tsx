@@ -12,6 +12,12 @@ import {
   ArrowUpRight,
   Radio,
   Settings as Settings2,
+  Database,
+  Users,
+  Images,
+  Heart,
+  MessagesSquare,
+  Activity,
 } from "lucide-react";
 import AuthPage from "./Auth";
 import { configured } from "./config";
@@ -159,9 +165,17 @@ function Shell({
     content = <Explore uid={uid} />;
   else if (path === "/saved") content = <Saved uid={uid} />;
   else if (path === "/archived") content = <Saved uid={uid} archived />;
-  else if (path === "/settings") content = <SettingsPage username={p.username} />;
+  else if (path === "/settings") content = (
+    <SettingsPage
+      username={p.username}
+      email={session.user.email || ""}
+      isAdmin={isAdmin}
+      theme={theme}
+      toggleTheme={toggleTheme}
+    />
+  );
   else if (path === "/live" || /^\/live\/\d+$/.test(path))
-    content = <LivePage id={path === "/live" ? undefined : Number(path.split("/")[2])} me={p} />;
+    content = <LivePage id={path === "/live" ? undefined : Number(path.split("/")[2])} me={p} canStartLive={isAdmin} />;
   else if (path === "/notifications") content = <Notifications uid={uid} />;
   else if (path.startsWith("/profile/") && !/\/(followers|following)$/.test(path))
     content = (
@@ -186,106 +200,16 @@ function Shell({
     );
   else if (/^\/post\/\d+$/.test(path))
     content = <SinglePost id={Number(path.split("/")[2])} uid={uid} />;
-  else if (/^\/post\/\d+\/likes$/.test(path)) {
-    const id = Number(path.split("/")[2]);
-    const likes = useLoad(() => api.postLikes(id), [id]);
-    content = (
-      <div className="feed-column">
-        <h1>Siapa yang suka</h1>
-        <button className="bare" onClick={() => go(`/post/${id}`)}>
-          ← Kembali ke postingan
-        </button>
-        {likes.busy ? <Loading /> : likes.error ? (
-          <ErrorBox message={likes.error} retry={likes.reload} />
-        ) : likes.value && likes.value.length ? (
-          <>
-            <p className="text-muted">{likes.value.length} orang menyukai postingan ini</p>
-            <div className="like-grid">
-              {likes.value.map((entry) => (
-                <div key={entry.user.id} className="like-user" onClick={() => go(`/profile/${entry.user.username}`)}>
-                  <Avatar p={entry.user} size={48} />
-                  <small>{entry.user.username}</small>
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="text-muted">Belum ada yang suka.</p>
-        )}
-      </div>
-    );
-  } else if (/^\/profile\/[^/]+\/followers$/.test(path) || /^\/profile\/[^/]+\/following$/.test(path)) {
+  else if (/^\/post\/\d+\/likes$/.test(path))
+    content = <PostLikesPage id={Number(path.split("/")[2])} />;
+  else if (/^\/profile\/[^/]+\/followers$/.test(path) || /^\/profile\/[^/]+\/following$/.test(path)) {
     const parts = path.split("/");
     const username = decodeURIComponent(parts[2]);
     const kind = parts[3] === "followers" ? "followers" : "following";
-    const title = kind === "followers" ? "Pengikut" : "Mengikuti";
-    const q2 = useLoad(() => api.followList(username, kind), [username, kind]);
-    content = (
-      <div className="feed-column">
-        <h1>{title}</h1>
-        <button className="bare" onClick={() => go(`/profile/${username}`)}>
-          ← Kembali ke profil
-        </button>
-        {q2.busy ? <Loading /> : q2.error ? (
-          <ErrorBox message={q2.error} retry={q2.reload} />
-        ) : q2.value?.length ? (
-          <div className="follow-list">
-            {q2.value.map((entry) => (
-              <div key={entry.user.id} className="follow-row" onClick={() => go(`/profile/${entry.user.username}`)}>
-                <Avatar p={entry.user} size={44} />
-                <div>
-                  <strong>{entry.user.display_name || entry.user.username}</strong>
-                  <small className="muted">@{entry.user.username}</small>
-                </div>
-                <button className="bare">
-                  <MessageCircle size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-muted">
-            {kind === "followers" ? "Belum ada pengikut." : "Belum ada yang diikuti."}
-          </p>
-        )}
-      </div>
-    );
-  } else if (path === "/db-stats") {
-    const ds = useLoad(() => api.dbStats(), []);
-    content = (
-      <div className="feed-column">
-        <h1>Monitor database</h1>
-        <p className="text-muted">Halaman ini bersifat internal.</p>
-        {ds.busy ? <Loading /> : ds.error ? (
-          <ErrorBox message={ds.error} retry={ds.reload} />
-        ) : ds.value ? (
-          <div className="db-stats">
-            <div className="db-stat-card">
-              <h3>Akun</h3>
-              <div className="db-stat-row"><span>Total pengguna</span><b>{String(ds.value.users)}</b></div>
-              <div className="db-stat-row"><span>Akun hidup (bypass 100 followers)</span><b>{String(ds.value.qualified_users)}</b></div>
-            </div>
-            <div className="db-stat-card">
-              <h3>Konten</h3>
-              <div className="db-stat-row"><span>Total postingan</span><b>{String(ds.value.posts)}</b></div>
-              <div className="db-stat-row"><span>Postingan arsip</span><b>{String(ds.value.archived)}</b></div>
-            </div>
-            <div className="db-stat-card">
-              <h3>Interaksi</h3>
-              <div className="db-stat-row"><span>Total suka</span><b>{String(ds.value.likes)}</b></div>
-              <div className="db-stat-row"><span>Total komentar</span><b>{String(ds.value.comments)}</b></div>
-              <div className="db-stat-row"><span>Total repost</span><b>{String(ds.value.reposts)}</b></div>
-            </div>
-            <div className="db-stat-card">
-              <h3>Koneksi</h3>
-              <div className="db-stat-row"><span>Total follow (mengikuti)</span><b>{String(ds.value.follows)}</b></div>
-              <div className="db-stat-row"><span>Postingan terbanyak</span><b>{String(ds.value.top_poster)}</b></div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    );
-  } else
+    content = <FollowListPage username={username} kind={kind} />;
+  } else if (path === "/internal/overview" || path === "/db-stats")
+    content = <DatabaseOverview isAdmin={isAdmin} />;
+  else
     content = (
       <div className="empty">
         <h1>Halaman tidak ditemukan</h1>
@@ -334,12 +258,6 @@ function Shell({
             {theme === "dark" ? <Sun size={22} /> : <Moon size={22} />}
             <span>{theme === "dark" ? "Mode terang" : "Mode gelap"}</span>
           </button>
-          {isAdmin && (
-            <button className="nav-item admin-link" onClick={() => go("/db-stats")}>
-              <Settings2 size={22} />
-              <span>Monitoring DB</span>
-            </button>
-          )}
           <button
             className="nav-item"
             onClick={async () => {
@@ -448,6 +366,90 @@ function Shell({
             setActiveCall(null);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+function PostLikesPage({ id }: { id: number }) {
+  const likes = useLoad(() => api.postLikes(id), [id]);
+  return (
+    <div className="social-list-page">
+      <header className="subpage-head">
+        <button className="back-round" aria-label="Kembali" onClick={() => go(`/post/${id}`)}>←</button>
+        <div><span className="eyebrow">AKTIVITAS POSTINGAN</span><h1>Disukai oleh</h1></div>
+      </header>
+      <section className="panel social-list-panel">
+        {likes.busy ? <Loading /> : likes.error ? (
+          <ErrorBox message={likes.error} retry={likes.reload} />
+        ) : likes.value?.length ? likes.value.map((entry) => (
+          <button key={entry.user.id} className="social-person" onClick={() => go(`/profile/${entry.user.username}`)}>
+            <Avatar p={entry.user} size={48} />
+            <span><strong>{entry.user.display_name || entry.user.username}</strong><small>@{entry.user.username}</small></span>
+            <span className="social-person-action">Lihat profil</span>
+          </button>
+        )) : <p className="empty-inbox">Belum ada yang menyukai postingan ini.</p>}
+      </section>
+    </div>
+  );
+}
+
+function FollowListPage({ username, kind }: { username: string; kind: "followers" | "following" }) {
+  const list = useLoad(() => api.followList(username, kind), [username, kind]);
+  const title = kind === "followers" ? "Pengikut" : "Mengikuti";
+  return (
+    <div className="social-list-page">
+      <header className="subpage-head">
+        <button className="back-round" aria-label="Kembali" onClick={() => go(`/profile/${username}`)}>←</button>
+        <div><span className="eyebrow">@{username}</span><h1>{title}</h1></div>
+      </header>
+      <section className="panel social-list-panel">
+        {list.busy ? <Loading /> : list.error ? (
+          <ErrorBox message={list.error} retry={list.reload} />
+        ) : list.value?.length ? list.value.map((entry) => (
+          <button key={entry.user.id} className="social-person" onClick={() => go(`/profile/${entry.user.username}`)}>
+            <Avatar p={entry.user} size={48} />
+            <span><strong>{entry.user.display_name || entry.user.username}</strong><small>@{entry.user.username}</small></span>
+            <span className="social-person-action">Lihat profil</span>
+          </button>
+        )) : <p className="empty-inbox">{kind === "followers" ? "Belum ada pengikut." : "Belum mengikuti siapa pun."}</p>}
+      </section>
+    </div>
+  );
+}
+
+function DatabaseOverview({ isAdmin }: { isAdmin: boolean }) {
+  const stats = useLoad(() => isAdmin ? api.dbStats() : Promise.resolve({ allowed: false }), [isAdmin]);
+  const value = stats.value;
+  if (!isAdmin || (value && value.allowed !== true)) {
+    return <div className="empty"><Database size={38} /><h1>Akses terbatas</h1><p>Halaman internal ini hanya tersedia untuk administrator Octgram.</p><button onClick={() => go("/")}>Ke beranda</button></div>;
+  }
+  const cards = value ? [
+    { label: "Pengguna", value: value.profiles, icon: Users },
+    { label: "Postingan aktif", value: Number(value.posts || 0) - Number(value.archived_posts || 0), icon: Images },
+    { label: "Interaksi", value: Number(value.likes || 0) + Number(value.comments || 0) + Number(value.reposts || 0), icon: Heart },
+    { label: "Pesan", value: value.messages, icon: MessagesSquare },
+  ] : [];
+  return (
+    <div className="admin-dashboard">
+      <header className="admin-hero">
+        <div><span className="admin-badge"><Activity size={14} /> INTERNAL</span><h1>Database overview</h1><p>Pantau kondisi inti Octgram langsung dari data Supabase.</p></div>
+        <button onClick={stats.reload}>Perbarui data</button>
+      </header>
+      {stats.busy ? <Loading /> : stats.error ? <ErrorBox message={stats.error} retry={stats.reload} /> : value && (
+        <>
+          <div className="admin-metrics">{cards.map((card) => <article key={card.label} className="admin-metric"><span><card.icon size={20} /></span><small>{card.label}</small><strong>{Number(card.value || 0).toLocaleString("id-ID")}</strong></article>)}</div>
+          <section className="panel admin-details">
+            <h2>Rincian sistem</h2>
+            <div className="admin-detail-grid">
+              <div><span>Postingan</span><b>{String(value.posts ?? 0)}</b></div><div><span>Diarsipkan</span><b>{String(value.archived_posts ?? 0)}</b></div>
+              <div><span>Suka</span><b>{String(value.likes ?? 0)}</b></div><div><span>Komentar</span><b>{String(value.comments ?? 0)}</b></div>
+              <div><span>Repost</span><b>{String(value.reposts ?? 0)}</b></div><div><span>Mengikuti</span><b>{String(value.follows ?? 0)}</b></div>
+              <div><span>Percakapan</span><b>{String(value.conversations ?? 0)}</b></div><div><span>Live tercatat</span><b>{String(value.live_streams ?? 0)}</b></div>
+              <div><span>Pengguna baru 7 hari</span><b>{String(value.new_users_7d ?? 0)}</b></div><div><span>Postingan 24 jam</span><b>{String(value.new_posts_24h ?? 0)}</b></div>
+            </div>
+          </section>
+        </>
       )}
     </div>
   );

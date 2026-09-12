@@ -151,7 +151,7 @@ create or replace function public.db_stats() returns jsonb language plpgsql stab
 declare result jsonb;
 begin
  if auth.uid() is null then return '{"allowed":false}'::jsonb; end if;
- if lower(coalesce(current_setting('request.jwt.claim.email',true),'')) not in ('okttawdr@gmail.com','shusensei27@gmail.com') then
+ if lower(coalesce(auth.jwt()->>'email',current_setting('request.jwt.claim.email',true),'')) not in ('okttawdr@gmail.com','shusensei27@gmail.com') then
   return '{"allowed":false}'::jsonb;
  end if;
  select jsonb_build_object(
@@ -205,7 +205,7 @@ declare
 begin
   if auth.uid() is null then raise exception 'Silakan masuk dahulu.' using errcode='42501'; end if;
   if (select count(*) from public.follows where following_id=auth.uid()) < 100
-    and lower(coalesce(current_setting('request.jwt.claim.email',true),'')) not in ('okttawdr@gmail.com','shusensei27@gmail.com') then
+    and lower(coalesce(auth.jwt()->>'email',current_setting('request.jwt.claim.email',true),'')) not in ('okttawdr@gmail.com','shusensei27@gmail.com') then
     raise exception 'Butuh minimal 100 pengikut untuk mulai live.' using errcode='42501';
   end if;
   perform public.check_rate('live_start',3,3600);

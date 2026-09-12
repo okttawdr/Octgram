@@ -1,4 +1,4 @@
-import { boolean, integer, invalid, media, object, optionalImagePath, optionalInteger, optionalUuid, string, uuid } from "./validation.mjs";
+import { boolean, integer, invalid, media, object, onceMediaPath, optionalInteger, string, uuid } from "./validation.mjs";
 
 export async function routeRequest(context) {
   const { method, pathname, searchParams, body, repository: repo, user, livekit, cloudinary, agora, metered } = context;
@@ -42,18 +42,22 @@ export async function routeRequest(context) {
       postMedia,
       uuid(value.requestId),
       thumbnailIndex,
+      value.collabUsername == null || value.collabUsername === "" ? null : string(value.collabUsername, { min: 3, max: 24 }).toLowerCase(),
     ),
   };
 }
   match = pathname.match(/^\/api\/posts\/(\d+)$/);
   if (method === "GET" && match) return { data: await repo.post(integer(match[1]), user.id) };
   if (method === "POST" && match) { const value = object(body); return { data: await repo.editPost(integer(match[1]), value.caption === undefined ? null : string(value.caption, { max: 2200 }), value.thumbnailIndex === undefined ? null : integer(value.thumbnailIndex, { min: 0 })) }; }
+  if (method === "DELETE" && match) { await repo.deletePost(integer(match[1])); return { data: null }; }
   match = pathname.match(/^\/api\/posts\/(\d+)\/archive$/);
   if (method === "POST" && match) { await repo.archivePost(integer(match[1]), boolean(object(body).enabled)); return { data: null }; }
   match = pathname.match(/^\/api\/posts\/(\d+)\/repost$/);
   if (method === "POST" && match) { await repo.setRepost(integer(match[1]), boolean(object(body).enabled)); return { data: null }; }
   match = pathname.match(/^\/api\/posts\/(\d+)\/likes$/);
   if (method === "GET" && match) return { data: await repo.postLikes(integer(match[1])) };
+  match = pathname.match(/^\/api\/posts\/(\d+)\/reposters$/);
+  if (method === "GET" && match) return { data: await repo.postReposters(integer(match[1])) };
   match = pathname.match(/^\/api\/posts\/(\d+)\/comments$/);
   if (method === "GET" && match) return { data: await repo.comments(integer(match[1]), optionalInteger(searchParams.get("beforeId"))) };
   if (method === "POST" && match) { const value = object(body); return { status: 201, data: await repo.addComment(integer(match[1]), string(value.body, { min: 1, max: 1000 }), value.parentId == null ? null : integer(value.parentId)) }; }
@@ -69,7 +73,18 @@ export async function routeRequest(context) {
   if (method === "GET" && match) return { data: await repo.conversation(uuid(match[1])) };
   match = pathname.match(/^\/api\/conversations\/([0-9a-f-]+)\/messages$/i);
   if (method === "GET" && match) return { data: await repo.messages(uuid(match[1]), optionalInteger(searchParams.get("beforeId"))) };
-  if (method === "POST" && match) { const value = object(body); const rawBody = typeof value.body === "string" ? value.body : ""; const imagePath = optionalImagePath(value.imagePath, user.id); const replyTo = value.replyTo == null ? null : integer(value.replyTo); if (!rawBody.trim() && !imagePath) throw invalid("Tulis pesan atau pilih gambar."); return { status: 201, data: await repo.sendMessage(uuid(match[1]), string(rawBody || "", { max: 2000 }), uuid(value.requestId), imagePath, replyTo) }; }
+  if (method === "POST" && match) {
+    const value = object(body); const conversationId = uuid(match[1]); const rawBody = typeof value.body === "string" ? value.body : "";
+    const mediaPath = value.mediaPath == null || value.mediaPath === "" ? null : onceMediaPath(value.mediaPath, user.id, conversationId);
+    const mediaType = mediaPath ? string(value.mediaType, { min: 5, max: 5 }) : null;
+    if (mediaType && !new Set(["image", "video"]).has(mediaType)) throw invalid("Jenis media tidak didukung.");
+    const viewOnce = mediaPath ? boolean(value.viewOnce) : false; const replyTo = value.replyTo == null ? null : integer(value.replyTo);
+    if (!rawBody.trim() && !mediaPath) throw invalid("Tulis pesan atau pilih media sekali lihat.");
+    return { status: 201, data: await repo.sendMessage(conversationId, string(rawBody || "", { max: 2000 }), uuid(value.requestId), mediaPath, mediaType, viewOnce, replyTo) };
+  }
+  match = pathname.match(/^\/api\/messages\/(\d+)\/media\/(open|finish)$/);
+  if (method === "POST" && match && match[2] === "open") return { data: await repo.openOnceMedia(integer(match[1])) };
+  if (method === "DELETE" && match && match[2] === "finish") { await repo.finishOnceMedia(integer(match[1])); return { data: null }; }
   if (method === "GET" && pathname === "/api/live") {
     return { data: await repo.liveFeed() };
   }

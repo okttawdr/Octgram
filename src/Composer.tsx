@@ -6,6 +6,7 @@ import {
   Check,
   UploadCloud,
   Trash2,
+  AtSign,
 } from "lucide-react";
 import { processImage, type ProcessOptions } from "./images";
 import { errorText, formatBytes, go, type Media } from "./lib";
@@ -25,6 +26,9 @@ type Item = {
 const defaults: ProcessOptions = {
   rotation: 0,
   crop: "original",
+  zoom: 1,
+  offsetX: 0,
+  offsetY: 0,
 };
 export default function Composer({ uid, followerCount }: { uid: string; followerCount: number }) {
   const maxItems = followerCount >= 100 ? 20 : 8;
@@ -32,6 +36,7 @@ export default function Composer({ uid, followerCount }: { uid: string; follower
   const [selected, setSelected] = useState(0);
   const [thumbnail, setThumbnail] = useState(0);
   const [caption, setCaption] = useState("");
+  const [collabUsername, setCollabUsername] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [stage, setStage] = useState("");
@@ -148,7 +153,7 @@ export default function Composer({ uid, followerCount }: { uid: string; follower
         });
       }
       setStage("Menerbitkan postingan…");
-      await api.publishPost(caption, media, request.current, thumbnail);
+      await api.publishPost(caption, media, request.current, thumbnail, collabUsername.replace(/^@/, "").trim() || undefined);
       published.current = true;
       go("/");
     } catch (e) {
@@ -285,6 +290,14 @@ export default function Composer({ uid, followerCount }: { uid: string; follower
                   <RotateCw size={16} />
                   Putar · {item.options.rotation}°
                 </button>
+                <label>
+                  Zoom · {(item.options.zoom || 1).toFixed(1)}×
+                  <input type="range" min="1" max="3" step="0.1" value={item.options.zoom || 1} onChange={(e) => patch(item.id, { blob: undefined, options: { ...item.options, zoom: Number(e.target.value) } })} />
+                </label>
+                {(item.options.zoom || 1) > 1 && <div className="crop-position-grid">
+                  <label>Geser horizontal<input type="range" min="-1" max="1" step="0.05" value={item.options.offsetX || 0} onChange={(e) => patch(item.id, { blob: undefined, options: { ...item.options, offsetX: Number(e.target.value) } })} /></label>
+                  <label>Geser vertikal<input type="range" min="-1" max="1" step="0.05" value={item.options.offsetY || 0} onChange={(e) => patch(item.id, { blob: undefined, options: { ...item.options, offsetY: Number(e.target.value) } })} /></label>
+                </div>}
                 <button className="wide" onClick={() => void preview()}>
                   Terapkan & lihat hasil
                 </button>
@@ -314,6 +327,11 @@ export default function Composer({ uid, followerCount }: { uid: string; follower
               onChange={(e) => setCaption(e.target.value)}
             />
             <small>{caption.length}/2200</small>
+          </label>
+          <label className="collab-input">
+            Tandai kolaborator
+            <span><AtSign size={17} /><input value={collabUsername} onChange={(e) => setCollabUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_@]/g, ""))} maxLength={25} pattern="@?[a-z0-9_]{3,24}" placeholder="username" disabled={busy} /></span>
+            <small>Opsional. Kolaborator akan menerima notifikasi.</small>
           </label>
           {error && <ErrorBox message={error} />}
           {busy && (
