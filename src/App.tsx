@@ -129,6 +129,7 @@ function Shell({
   const [invite, setInvite] = useIncomingCalls(uid);
   const [activeCall, setActiveCall] = useState<{ callId: string; peer: Profile; isCaller: boolean } | null>(null);
   const p = me.value;
+  const isAdmin = ["okttawdr@gmail.com", "shusensei27@gmail.com"].includes((session.user.email || "").toLowerCase());
   const nav = [
     { path: "/", label: "Beranda", icon: Home },
     { path: "/explore", label: "Jelajahi", icon: Compass },
@@ -162,7 +163,7 @@ function Shell({
   else if (path === "/live" || /^\/live\/\d+$/.test(path))
     content = <LivePage id={path === "/live" ? undefined : Number(path.split("/")[2])} me={p} />;
   else if (path === "/notifications") content = <Notifications uid={uid} />;
-  else if (path.startsWith("/profile/"))
+  else if (path.startsWith("/profile/") && !/\/(followers|following)$/.test(path))
     content = (
       <ProfilePage
         key={path}
@@ -333,6 +334,12 @@ function Shell({
             {theme === "dark" ? <Sun size={22} /> : <Moon size={22} />}
             <span>{theme === "dark" ? "Mode terang" : "Mode gelap"}</span>
           </button>
+          {isAdmin && (
+            <button className="nav-item admin-link" onClick={() => go("/db-stats")}>
+              <Settings2 size={22} />
+              <span>Monitoring DB</span>
+            </button>
+          )}
           <button
             className="nav-item"
             onClick={async () => {

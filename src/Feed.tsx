@@ -130,6 +130,7 @@ export function PostCard({ post, uid, onAction }: { post: Post; uid: string; onA
   const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [captionDraft, setCaptionDraft] = useState(post.caption || "");
+  const [thumbDraft, setThumbDraft] = useState(post.thumbnail_index || 0);
   const [repostConfirm, setRepostConfirm] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [showLikes, setShowLikes] = useState(false);
@@ -161,7 +162,7 @@ export function PostCard({ post, uid, onAction }: { post: Post; uid: string; onA
   async function doEdit() {
     setActionErr("");
     try {
-      await api.editPost(post.id, { caption: captionDraft || null });
+      await api.editPost(post.id, { caption: captionDraft || null, thumbnailIndex: thumbDraft });
       setEditOpen(false);
       onAction?.("reload", post.id);
     } catch (e) {
@@ -304,120 +305,54 @@ export function PostCard({ post, uid, onAction }: { post: Post; uid: string; onA
               ))}
             </div>
           )}
-          {isOwner && (
-            <div className="action-menu-wrap">
-              <button
-                className={`bare ${menuOpen ? "active" : ""}`}
-                aria-label="Opsi postingan"
-                aria-haspopup="true"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen((v) => !v)}
-              >
-                <MoreHorizontal size={22} />
-              </button>
-              {menuOpen && (
-                <div className="action-menu" role="menu">
+        </div>
+        <strong>{count.toLocaleString("id-ID")} suka</strong>
+        <div className="post-actions owner-actions">
+          <div className="action-menu-wrap">
+            <button
+              className={`bare ${menuOpen ? "active" : ""}`}
+              aria-label="Opsi postingan"
+              aria-haspopup="true"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              <MoreHorizontal size={22} />
+            </button>
+            {menuOpen && (
+              <div className="action-menu" role="menu">
+                {isOwner && (
                   <button className="action-menu-item" role="menuitem" onClick={() => { setEditOpen(true); setMenuOpen(false); }}>
-                    <Pencil size={16} /> Edit
+                    <Pencil size={16} /> Edit postingan
                   </button>
-                  <button className="action-menu-item" role="menuitem" onClick={() => { setRepostConfirm(true); setMenuOpen(false); }}>
-                    <Repeat2 size={16} /> Repost
-                  </button>
-                  <button className="action-menu-item" role="menuitem" onClick={() => { openLikes(); }}>
-                    <Heart size={16} /> Siapa yang suka
-                  </button>
-                  <button className="action-menu-item" role="menuitem" onClick={() => { openCollabs(); }}>
-                    <Users size={16} /> Kolaborator
-                  </button>
-                  <hr className="action-menu-divider" />
-                  <button className="action-menu-item" role="menuitem" onClick={() => { doShare(); }}>
-                    {shareCopied ? <><Check size={16} /> Tersalin</> : <><Share2 size={16} /> Bagikan</>}
-                  </button>
+                )}
+                <button className="action-menu-item" role="menuitem" onClick={() => { setRepostConfirm(true); setMenuOpen(false); }}>
+                  <Repeat2 size={16} /> Repost
+                </button>
+                <button className="action-menu-item" role="menuitem" onClick={() => { openLikes(); }}>
+                  <Heart size={16} /> Siapa yang suka
+                </button>
+                <button className="action-menu-item" role="menuitem" onClick={() => { openCollabs(); }}>
+                  <Users size={16} /> Kolaborator
+                </button>
+                <hr className="action-menu-divider" />
+                <button className="action-menu-item" role="menuitem" onClick={() => { doShare(); }}>
+                  {shareCopied ? (<><Check size={16} /> Tersalin</>) : (<><Share2 size={16} /> Bagikan</>)}
+                </button>
+                {isOwner && (
                   <button className="action-menu-item soft" role="menuitem" onClick={() => { doArchive(); }}>
                     <Archive size={16} /> Arsipkan
                   </button>
+                )}
+                {isOwner && (
                   <button className="action-menu-item danger" role="menuitem" onClick={() => { doDelete(); }}>
                     <Trash2 size={16} /> Hapus
                   </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        <strong>{count.toLocaleString("id-ID")} suka</strong>
-        {isOwner && (
-          <div className="post-actions owner-actions">
-            <div className="action-menu-wrap">
-              <button
-                className={`bare ${menuOpen ? "active" : ""}`}
-                aria-label="Opsi postingan"
-                aria-haspopup="true"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen((v) => !v)}
-              >
-                <MoreHorizontal size={22} />
-              </button>
-              {menuOpen && (
-                <div className="action-menu" role="menu">
-                  <button
-                    className="action-menu-item"
-                    role="menuitem"
-                    onClick={() => { setEditOpen(true); setMenuOpen(false); }}
-                  >
-                    <Pencil size={16} /> Edit
-                  </button>
-                  <button
-                    className="action-menu-item"
-                    role="menuitem"
-                    onClick={() => { setRepostConfirm(true); setMenuOpen(false); }}
-                  >
-                    <Repeat2 size={16} /> Repost
-                  </button>
-                  <button
-                    className="action-menu-item"
-                    role="menuitem"
-                    onClick={() => { openLikes(); }}
-                  >
-                    <Heart size={16} /> Siapa yang suka
-                  </button>
-                  <button
-                    className="action-menu-item"
-                    role="menuitem"
-                    onClick={() => { openCollabs(); }}
-                  >
-                    <Users size={16} /> Kolaborator
-                  </button>
-                  <hr className="action-menu-divider" />
-                  <button
-                    className="action-menu-item"
-                    role="menuitem"
-                    onClick={() => { doShare(); }}
-                  >
-                    {shareCopied ? (
-                      <><Check size={16} /> Tersalin</>
-                    ) : (
-                      <><Share2 size={16} /> Bagikan</>
-                    )}
-                  </button>
-                  <button
-                    className="action-menu-item soft"
-                    role="menuitem"
-                    onClick={() => { doArchive(); }}
-                  >
-                    <Archive size={16} /> Arsipkan
-                  </button>
-                  <button
-                    className="action-menu-item danger"
-                    role="menuitem"
-                    onClick={() => { doDelete(); }}
-                  >
-                    <Trash2 size={16} /> Hapus
-                  </button>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
         {post.caption && (
           <p className="caption">
             <button
@@ -448,30 +383,71 @@ export function PostCard({ post, uid, onAction }: { post: Post; uid: string; onA
       {/* ===== Action modals ===== */}
       {editOpen && (
         <div className="modal-backdrop" role="dialog" aria-modal aria-label="Edit postingan">
-          <div className="modal-card">
+          <div className="modal-card edit-post-modal">
             <div className="modal-header">
               <h2>Edit postingan</h2>
-              <button className="bare" onClick={() => setEditOpen(false)}>
+              <button className="bare" onClick={() => setEditOpen(false)} aria-label="Tutup">
                 <X size={20} />
               </button>
             </div>
             <div className="modal-body">
-              <label className="text-muted" style={{ display: "block", marginBottom: 8 }}>
+              {post.media.length > 0 && (
+                <>
+                  <label className="edit-section-label">
+                    Sampul postingan
+                    {post.media.length > 1 && <span className="text-muted"> · pilih salah satu foto</span>}
+                  </label>
+                  <div className="edit-thumb-grid">
+                    {post.media.map((m, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`edit-thumb ${thumbDraft === i ? "selected" : ""}`}
+                        onClick={() => setThumbDraft(i)}
+                        aria-label={`Jadikan foto ${i + 1} sebagai sampul`}
+                      >
+                        <img src={mediaUrl(m.path, 160)} alt="" />
+                        {thumbDraft === i && (
+                          <span className="edit-thumb-check">
+                            <Check size={14} />
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <label className="edit-section-label" htmlFor="edit-caption-field">
                 Caption
               </label>
               <textarea
+                id="edit-caption-field"
                 className="caption-editor"
                 value={captionDraft}
                 onChange={(e) => setCaptionDraft(e.target.value)}
                 maxLength={2200}
                 rows={4}
+                placeholder="Tulis caption..."
               />
+              <div className="edit-caption-meta">
+                <span className="text-muted">Sebut orang lain dengan @username</span>
+                <span className={`char-counter ${captionDraft.length > 2000 ? "warn" : ""}`}>
+                  {captionDraft.length}/2200
+                </span>
+              </div>
               {actionErr && <ErrorBox message={actionErr} />}
-              {captionDraft !== post.caption && (
-                <button className="primary mt-2" onClick={doEdit}>
-                  Simpan perubahan
-                </button>
-              )}
+            </div>
+            <div className="modal-footer">
+              <button className="bare" onClick={() => setEditOpen(false)}>
+                Batal
+              </button>
+              <button
+                className="primary"
+                disabled={captionDraft === post.caption && thumbDraft === (post.thumbnail_index || 0)}
+                onClick={doEdit}
+              >
+                Simpan perubahan
+              </button>
             </div>
           </div>
         </div>

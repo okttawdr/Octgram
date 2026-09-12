@@ -184,12 +184,12 @@ export default function ProfilePage({
             <span>
               <b>{q.value.posts}</b> postingan
             </span>
-            <span>
+            <button className="bare stat-link" onClick={() => go(`/profile/${p.username}/followers`)}>
               <b>{q.value.followers}</b> pengikut
-            </span>
-            <span>
+            </button>
+            <button className="bare stat-link" onClick={() => go(`/profile/${p.username}/following`)}>
               <b>{q.value.following}</b> mengikuti
-            </span>
+            </button>
           </div>
         </div>
       </section>
