@@ -11,7 +11,7 @@ export function optionalString(value, { max = 200 } = {}) { if (value == null ||
 export function optionalUuid(value) { if (value == null || value === "") return null; return uuid(value); }
 export function imagePath(value, userId) { const p = string(value, { min: 10, max: 200 }); if (!p.startsWith(`octgram/chat/${userId}_`)) throw invalid("Gambar belum terunggah. Unggah ulang gambarnya."); return p; }
 export function optionalImagePath(value, userId) { if (value == null || value === "") return null; return imagePath(value, userId); }
-export function onceMediaPath(value, userId, conversationId) { const p = string(value, { min: 70, max: 240 }); if (!p.startsWith(`${userId}/${conversationId}/`) || !/^[0-9a-f-]+\.(webp|mp4|webm)$/i.test(p.split("/").at(-1) || "")) throw invalid("Media sekali lihat belum terunggah atau jalur penyimpanannya tidak valid."); return p; }
+export function onceMediaPath(value, userId, conversationId) { const p = string(value, { min: 70, max: 240 }); if (!p.startsWith(`${userId}/${conversationId}/`) || !/^[0-9a-f-]+\.(avif|webp|mp4|webm)$/i.test(p.split("/").at(-1) || "")) throw invalid("Media belum terunggah atau jalur penyimpanannya tidak valid."); return p; }
 export function media(value) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 20) throw invalid("Pilih 1–20 foto.");
   return value.map((item) => {

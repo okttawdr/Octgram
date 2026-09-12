@@ -139,10 +139,10 @@ function Shell({
   const nav = [
     { path: "/", label: "Beranda", icon: Home, mobile: true },
     { path: "/explore", label: "Jelajahi", icon: Compass, mobile: true },
-    { path: "/create", label: "Buat postingan", icon: PlusSquare, mobile: true },
+    { path: "/create", label: "Buat postingan", icon: PlusSquare, mobile: true, primary: true },
     { path: "/live", label: "Live", icon: Radio, mobile: true },
-    { path: "/notifications", label: "Notifikasi", icon: Bell, mobile: false },
-    { path: "/messages", label: "Pesan", icon: MessageCircle, mobile: false },
+    { path: "/notifications", label: "Notifikasi", icon: Bell, mobile: true },
+    { path: "/messages", label: "Pesan", icon: MessageCircle, mobile: true },
   ];
   if (me.busy) return <Loading />;
   if (me.error || !p)
@@ -228,6 +228,7 @@ function Shell({
               key={n.path}
               className={
                 "nav-item " + (n.mobile ? "mobile-primary " : "mobile-secondary ") +
+                (n.primary ? "nav-item-create " : "") +
                 (path === n.path ||
                 (n.path === "/messages" && path.startsWith("/messages/"))
                   ? "active"
@@ -235,7 +236,7 @@ function Shell({
               }
               onClick={() => go(n.path)}
             >
-              <n.icon size={23} />
+              <n.icon size={n.primary ? 21 : 23} />
               <span>{n.label}</span>
             </button>
           ))}
@@ -288,8 +289,6 @@ function Shell({
       <header className="mobile-header">
         <Brand />
         <div className="mobile-header-actions">
-          <button aria-label="Notifikasi" onClick={() => go("/notifications")}><Bell size={20} /></button>
-          <button aria-label="Pesan" onClick={() => go("/messages")}><MessageCircle size={20} /></button>
           <button aria-label="Pengaturan" onClick={() => go("/settings")}><Settings2 size={20} /></button>
         </div>
       </header>
