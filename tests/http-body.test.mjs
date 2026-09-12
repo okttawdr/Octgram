@@ -9,3 +9,12 @@ test("readJson accepts chunked JSON without content-length", async () => {
   request.headers = { "content-type": "application/json", "transfer-encoding": "chunked" };
   assert.deepEqual(await readJson(request), { ok: true });
 });
+
+test("readJson accepts bodyless POST and DELETE requests", async () => {
+  for (const method of ["POST", "DELETE"]) {
+    const request = Readable.from([]);
+    request.method = method;
+    request.headers = {};
+    assert.equal(await readJson(request), undefined);
+  }
+});

@@ -6,6 +6,16 @@ import { apiUrl } from "./api-core.mjs";
 type Options = { method?: string; body?: unknown; query?: Record<string, unknown>; signal?: AbortSignal };
 type ApiFailure = { error?: { code?: string; message?: string } };
 
+function liveDeviceId(): string {
+  const key = "octgram-live-device";
+  let value = localStorage.getItem(key);
+  if (!value) {
+    value = crypto.randomUUID();
+    localStorage.setItem(key, value);
+  }
+  return value;
+}
+
 async function request<T>(path: string, options: Options = {}, retry = true): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Sesi tidak tersedia. Silakan masuk kembali.");
@@ -55,12 +65,13 @@ export const api = {
   startChat: (userId: string) => request<string>("/conversations", { method: "POST", body: { userId } }),
   messages: (conversationId: string, beforeId?: number) => request<Message[]>(`/conversations/${conversationId}/messages`, { query: { beforeId } }),
   sendMessage: (conversationId: string, body: string, requestId: string, opts?: { mediaPath?: string | null; mediaType?: "image" | "video" | null; viewOnce?: boolean; replyTo?: number | null }) => request<Message>(`/conversations/${conversationId}/messages`, { method: "POST", body: { body, requestId, mediaPath: opts?.mediaPath ?? null, mediaType: opts?.mediaType ?? null, viewOnce: opts?.viewOnce ?? false, replyTo: opts?.replyTo ?? null } }),
-  openOnceMedia: (messageId: number) => request<{ path: string; type: "image" | "video" }>(`/messages/${messageId}/media/open`, { method: "POST" }),
-  finishOnceMedia: (messageId: number) => request<null>(`/messages/${messageId}/media/finish`, { method: "DELETE" }),
+  openOnceMedia: (messageId: number) => request<{ path: string; type: "image" | "video" }>(`/messages/${messageId}/media/open`, { method: "POST", body: {} }),
+  finishOnceMedia: (messageId: number) => request<null>(`/messages/${messageId}/media/finish`, { method: "DELETE", body: {} }),
   liveFeed: () => request<LiveStream[]>("/live"),
-  goLive: (title: string) => request<LiveJoin>("/live", { method: "POST", body: { title } }),
-  joinLive: (id: number) => request<LiveJoin>(`/live/${id}`),
-  endLive: (id: number) => request<null>(`/live/${id}`, { method: "DELETE" }),
+  goLive: (title: string) => request<LiveJoin>("/live", { method: "POST", body: { title, deviceId: liveDeviceId() } }),
+  joinLive: (id: number) => request<LiveJoin>(`/live/${id}`, { query: { deviceId: liveDeviceId() } }),
+  liveStatus: (id: number) => request<{ id: number; status: "live" | "ended" }>(`/live/${id}/status`),
+  endLive: (id: number) => request<null>(`/live/${id}`, { method: "DELETE", body: { deviceId: liveDeviceId() } }),
   turnCredentials: () => request<{ iceServers: RTCIceServer[] }>("/calls/turn-credentials"),
   signUpload: (itemId: string, kind = "post") => request<{ cloudName: string; apiKey: string; timestamp: number; signature: string; publicId: string; folder: string; kind: string }>("/uploads/sign", { method: "POST", body: { itemId, kind } }),
   deleteUpload: (publicId: string) => request<null>("/uploads", { method: "DELETE", body: { publicId } }),

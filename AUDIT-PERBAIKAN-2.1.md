@@ -42,6 +42,6 @@ Audit mencakup router React, feed, profil, composer, pesan, live streaming, Node
 - Build produksi Vite selesai.
 - Tes database membuktikan pengirim tidak dapat membuka media sekali lihat.
 - Tes database membuktikan penerima dapat membuka lalu menghapus pesan dan objek media.
-- Tes migrasi memvalidasi upgrade 002 sampai 011 secara berurutan.
+- Tes migrasi memvalidasi upgrade 002 sampai 012 secara berurutan.
 
 Peringatan ukuran chunk Live tetap muncul karena SDK Agora dan LiveKit berukuran besar. Halaman Live sudah dimuat secara lazy, sehingga chunk tersebut hanya diambil ketika pengguna membuka fitur Live.

@@ -251,6 +251,19 @@ test("PostgreSQL migration, permissions and application workflows", async (t) =>
     await db.exec("reset role");
     assert.equal(await scalar("select count(*) from storage.objects where name=$1", [path]), 0);
   });
+  await t.test("live host control is locked to the device that started it", async () => {
+    const deviceA = "70000000-0000-4000-8000-000000000007";
+    const deviceB = "80000000-0000-4000-8000-000000000008";
+    await as(A);
+    const started = await scalar("select public.start_live('Tes',true,false,$1)", [deviceA]);
+    const repeated = await scalar("select public.start_live('Tes',true,false,$1)", [deviceA]);
+    assert.equal(repeated.id, started.id);
+    await assert.rejects(db.query("select public.start_live('Tes',true,false,$1)", [deviceB]), /perangkat lain/);
+    await assert.rejects(db.query("select public.join_live($1,$2)", [started.id, deviceB]), /perangkat lain/);
+    await assert.rejects(db.query("select public.end_live($1,$2)", [started.id, deviceB]), /perangkat yang memulainya/);
+    await db.query("select public.end_live($1,$2)", [started.id, deviceA]);
+    assert.equal((await scalar("select public.live_status($1)", [started.id])).status, "ended");
+  });
   await t.test(
     "anonymous role cannot read profiles, messages or invoke mutations",
     async () => {

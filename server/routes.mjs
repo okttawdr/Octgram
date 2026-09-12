@@ -91,17 +91,20 @@ export async function routeRequest(context) {
   if (method === "POST" && pathname === "/api/live") {
     if (!agora && !livekit) throw invalid("Livestreaming belum dikonfigurasi di server.");
     const value = object(body);
-    const stream = await repo.startLive(string(value.title ?? "", { max: 100 }), { agoraAvailable: Boolean(agora), livekitAvailable: Boolean(livekit) });
+    const deviceId = uuid(value.deviceId);
+    const stream = await repo.startLive(string(value.title ?? "", { max: 100 }), { agoraAvailable: Boolean(agora), livekitAvailable: Boolean(livekit) }, deviceId);
     const ttlSeconds = Math.max(60, Number(stream.reservation_minutes || stream.session_minutes || 1) * 60);
     const token = stream.provider === "agora" && agora
       ? agora.mintRtcToken({ channel: stream.room_name, uid: user.id, publisher: true, ttlSeconds })
       : livekit ? await livekit.mintToken({ identity: user.id, name: user.id, room: stream.room_name, canPublish: true, ttlSeconds }) : null;
     const chatToken = stream.provider === "agora" && agora ? agora.mintRtmToken({ uid: user.id, ttlSeconds }) : null;
-    return { status: 201, data: { ...stream, token, chat_token: chatToken } };
+    return { status: 201, data: { ...stream, token, chat_token: chatToken, is_host: true } };
   }
+  match = pathname.match(/^\/api\/live\/(\d+)\/status$/);
+  if (method === "GET" && match) return { data: await repo.liveStatus(integer(match[1])) };
   match = pathname.match(/^\/api\/live\/(\d+)$/);
   if (method === "GET" && match) {
-    const stream = await repo.joinLive(integer(match[1]));
+    const stream = await repo.joinLive(integer(match[1]), uuid(searchParams.get("deviceId")));
     if (!stream) throw invalid("Live tidak ditemukan.");
     const isHost = stream.host.id === user.id;
     const live = stream.status === "live";
@@ -118,7 +121,7 @@ export async function routeRequest(context) {
     return { data: { ...stream, token, chat_token: chatToken, is_host: isHost } };
   }
   if (method === "DELETE" && match) {
-    const stream = await repo.endLive(integer(match[1]));
+    const stream = await repo.endLive(integer(match[1]), uuid(object(body).deviceId));
     if (stream?.provider === "livekit" && livekit) await livekit.closeRoom(stream.room_name);
     return { data: null };
   }

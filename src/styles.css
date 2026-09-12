@@ -1921,6 +1921,9 @@ button:active {
 .live-close {
   color: #fff;
 }
+.live-fullscreen {
+  color: #fff;
+}
 .live-video-frame {
   flex: 1;
   position: relative;
@@ -1956,6 +1959,20 @@ button:active {
   border-radius: 22px;
   padding: 0 18px;
 }
+.live-action-error {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  z-index: 5;
+  transform: translateX(-50%);
+  width: min(90%, 520px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(126, 20, 20, .9);
+  color: #fff;
+  text-align: center;
+  font-size: .82rem;
+}
 .live-chat {
   display: flex;
   flex-direction: column;
@@ -1985,6 +2002,10 @@ button:active {
 }
 .live-chat-input input {
   flex: 1;
+}
+.live-chat-error {
+  color: #b42318;
+  padding: 0 12px 10px;
 }
 @media (max-width: 860px) {
   .live-room {

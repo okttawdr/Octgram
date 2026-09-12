@@ -620,10 +620,42 @@ progress::-webkit-progress-value { background: var(--gradient-accent); border-ra
   }
   .sidebar .nav-item.active { background: var(--tint) !important; }
   .sidebar .nav-item.active::before { display:none; }
+  .sidebar nav { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; }
+  .sidebar .mobile-secondary { display: none !important; }
+  .sidebar .nav-item { min-width: 0; width: 100% !important; padding: 10px 2px !important; }
+  .mobile-header { min-height: 64px; padding: 12px 14px !important; position: sticky; top: 0; z-index: 30; }
+  .mobile-header .brand { min-width: 0; font-size: 1.35rem !important; }
+  .mobile-header-actions { display: flex; align-items: center; gap: 2px; }
+  .mobile-header-actions button { width: 38px; height: 38px; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
   .main { margin-left: 0 !important; }
   .post { border-radius: 20px !important; border-left:1px solid var(--line) !important; border-right:1px solid var(--line) !important; margin-left:12px; margin-right:12px; }
   .post-photo { border-radius: 12px; margin: 0 8px; width: calc(100% - 16px); }
   .profile-stats { gap: 14px !important; }
+
+  .live-shell .sidebar,
+  .live-shell .mobile-header { display: none !important; }
+  .live-shell .live-main { position: fixed; inset: 0; z-index: 100; width: 100%; height: 100dvh; padding: 0 !important; margin: 0 !important; background: #030712; }
+  .live-shell .live-room { position: absolute; inset: 0; display: block; width: 100%; height: 100dvh; max-height: none; }
+  .live-shell .live-stage { position: absolute; inset: 0; width: 100%; height: 100%; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+  .live-shell .live-video-frame,
+  .live-shell .live-video-frame > div,
+  .live-shell .live-video-frame video { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+  .live-shell .live-stage-head { padding: calc(12px + env(safe-area-inset-top)) 12px 18px; gap: 7px; }
+  .live-shell .live-stage-host .avatar { width: 32px !important; height: 32px !important; }
+  .live-shell .live-stage-host small { max-width: 115px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .live-shell .live-viewers { padding: 5px 8px; }
+  .live-shell .live-close,
+  .live-shell .live-fullscreen { width: 34px; height: 34px; padding: 0; flex: 0 0 auto; }
+  .live-shell .live-fullscreen { display: none; }
+  .live-shell .live-chat { position: absolute; z-index: 4; left: 0; right: 0; bottom: 0; height: 38dvh; min-height: 220px; border: 0; border-radius: 0 !important; box-shadow: none !important; background: linear-gradient(180deg, transparent, rgba(0,0,0,.72) 45%, rgba(0,0,0,.9)); }
+  .live-shell .live-chat-log { color: #fff; padding: 40px 14px 8px; text-shadow: 0 1px 3px #000; }
+  .live-shell .live-chat-input { padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); border: 0; }
+  .live-shell .live-chat-input input { min-width: 0; color: #fff !important; background: rgba(8,15,32,.72) !important; border-color: rgba(255,255,255,.3) !important; }
+  .live-shell .live-chat-input input::placeholder { color: rgba(255,255,255,.72); }
+  .live-shell .live-chat-input button { width: 42px; height: 42px; padding: 0; border-radius: 50%; color: #fff; background: var(--accent); border: 0; }
+  .live-shell .live-chat-error { color: #ffd5d2; background: rgba(0,0,0,.8); padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .live-shell .live-controls { bottom: calc(38dvh + 12px); }
+  .live-shell .live-action-error { bottom: calc(38dvh + 72px); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; transition-duration: .001s !important; }

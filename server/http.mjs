@@ -15,7 +15,8 @@ export function bearerToken(request) {
 export async function readJson(request, limit = 262_144) {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method || "")) return undefined;
   const length = Number(request.headers["content-length"] || 0);
-  if (request.headers["content-length"] === "0") return undefined;
+  const hasBody = length > 0 || Boolean(request.headers["transfer-encoding"]);
+  if (!hasBody) return undefined;
   if (!String(request.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
     throw new HttpError(415, "UNSUPPORTED_MEDIA_TYPE", "Gunakan Content-Type application/json.");
   }

@@ -137,12 +137,12 @@ function Shell({
   const p = me.value;
   const isAdmin = ["okttawdr@gmail.com", "shusensei27@gmail.com"].includes((session.user.email || "").toLowerCase());
   const nav = [
-    { path: "/", label: "Beranda", icon: Home },
-    { path: "/explore", label: "Jelajahi", icon: Compass },
-    { path: "/create", label: "Buat postingan", icon: PlusSquare },
-    { path: "/live", label: "Live", icon: Radio },
-    { path: "/notifications", label: "Notifikasi", icon: Bell },
-    { path: "/messages", label: "Pesan", icon: MessageCircle },
+    { path: "/", label: "Beranda", icon: Home, mobile: true },
+    { path: "/explore", label: "Jelajahi", icon: Compass, mobile: true },
+    { path: "/create", label: "Buat postingan", icon: PlusSquare, mobile: true },
+    { path: "/live", label: "Live", icon: Radio, mobile: true },
+    { path: "/notifications", label: "Notifikasi", icon: Bell, mobile: false },
+    { path: "/messages", label: "Pesan", icon: MessageCircle, mobile: false },
   ];
   if (me.busy) return <Loading />;
   if (me.error || !p)
@@ -217,7 +217,7 @@ function Shell({
       </div>
     );
   return (
-    <div className="app-shell">
+    <div className={"app-shell " + (/^\/live\/\d+$/.test(path) ? "live-shell" : "")}>
       <aside className="sidebar">
         <button className="bare brand-button" onClick={() => go("/")}>
           <Brand />
@@ -227,7 +227,7 @@ function Shell({
             <button
               key={n.path}
               className={
-                "nav-item " +
+                "nav-item " + (n.mobile ? "mobile-primary " : "mobile-secondary ") +
                 (path === n.path ||
                 (n.path === "/messages" && path.startsWith("/messages/"))
                   ? "active"
@@ -241,7 +241,7 @@ function Shell({
           ))}
           <button
             className={
-              "nav-item " + (path === "/profile/" + p.username ? "active" : "")
+              "nav-item mobile-primary " + (path === "/profile/" + p.username ? "active" : "")
             }
             onClick={() => go("/profile/" + p.username)}
           >
@@ -287,11 +287,13 @@ function Shell({
       </aside>
       <header className="mobile-header">
         <Brand />
-        <button aria-label="Ganti tema" onClick={toggleTheme}>
-          {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
+        <div className="mobile-header-actions">
+          <button aria-label="Notifikasi" onClick={() => go("/notifications")}><Bell size={20} /></button>
+          <button aria-label="Pesan" onClick={() => go("/messages")}><MessageCircle size={20} /></button>
+          <button aria-label="Pengaturan" onClick={() => go("/settings")}><Settings2 size={20} /></button>
+        </div>
       </header>
-      <main className={path === "/" ? "main with-rail" : "main"}>
+      <main className={(path === "/" ? "main with-rail" : "main") + (/^\/live\/\d+$/.test(path) ? " live-main" : "")}>
         {error && <ErrorBox message={error} />}
         <Suspense fallback={<Loading />}>{content}</Suspense>
         {path === "/" && (

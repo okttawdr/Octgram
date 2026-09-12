@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Radio, Send, Users, X, Video, VideoOff, Mic, MicOff } from "lucide-react";
+import { Radio, Send, Users, X, Video, VideoOff, Mic, MicOff, Maximize2 } from "lucide-react";
 import AgoraRTC from "agora-rtc-sdk-ng";
 import type { IAgoraRTCClient, ICameraVideoTrack, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
-import AgoraRTM from "agora-rtm-sdk";
 import { Room, RoomEvent, createLocalTracks } from "livekit-client";
 import { api } from "./services/api";
 import { useLoad } from "./hooks";
 import { Avatar, Loading, ErrorBox } from "./ui";
-import { errorText, go, type Profile } from "./lib";
+import { db, errorText, go, type Profile } from "./lib";
 import { livekitUrl, agoraAppId } from "./config";
 import type { ChatEvent, LiveJoin, LiveStream } from "./domain/types";
 
@@ -29,6 +28,7 @@ function LiveLobby({ me, canStartLive }: { me: Profile & { follower_count: numbe
     setError("");
     try {
       const stream = await api.goLive(title);
+      sessionStorage.setItem(`octgram-live:${stream.id}`, JSON.stringify(stream));
       go(`/live/${stream.id}`);
     } catch (e) {
       setError(errorText(e));
@@ -94,35 +94,61 @@ function LiveLobby({ me, canStartLive }: { me: Profile & { follower_count: numbe
 }
 
 function LiveRoom({ id, me }: { id: number; me: Profile }) {
-  const [join, setJoin] = useState<LiveJoin | null>(null);
+  const [join, setJoin] = useState<LiveJoin | null>(() => {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(`octgram-live:${id}`) || "null") as LiveJoin | null;
+      return cached?.id === id && cached.token ? cached : null;
+    } catch { return null; }
+  });
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [connected, setConnected] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [viewers, setViewers] = useState(0);
   const [camOn, setCamOn] = useState(true);
   const [micOn, setMicOn] = useState(true);
   const [messages, setMessages] = useState<ChatEvent[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [chatReady, setChatReady] = useState(false);
+  const [chatError, setChatError] = useState("");
   const videoRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const stopRef = useRef<() => void>(() => {});
+  const chatChannelRef = useRef<ReturnType<typeof db.channel> | null>(null);
   const localTracks = useRef<[IMicrophoneAudioTrack, ICameraVideoTrack] | null>(null);
 
   useEffect(() => {
+    if (join?.id === id && join.token) return;
     let cancelled = false;
     api
       .joinLive(id)
-      .then((data) => !cancelled && setJoin(data))
+      .then((data) => {
+        if (!cancelled) {
+          sessionStorage.setItem(`octgram-live:${id}`, JSON.stringify(data));
+          setJoin(data);
+        }
+      })
       .catch((e) => !cancelled && setError(errorText(e)));
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, join?.id, join?.token]);
 
   const stopLive = useCallback(async () => {
-    stopRef.current();
-    await api.endLive(id).catch(() => {});
-    go("/live");
-  }, [id]);
+    if (ending) return;
+    setEnding(true);
+    setActionError("");
+    try {
+      await api.endLive(id);
+      await chatChannelRef.current?.send({ type: "broadcast", event: "ended", payload: { id } });
+      stopRef.current();
+      sessionStorage.removeItem(`octgram-live:${id}`);
+      go("/live");
+    } catch (e) {
+      setActionError(errorText(e));
+      setEnding(false);
+    }
+  }, [ending, id]);
 
   // Auto-cutoff: the server hands us a session budget (session_minutes) that
   // already accounts for the remaining safe quota. We enforce it client-side
@@ -135,6 +161,55 @@ function LiveRoom({ id, me }: { id: number; me: Profile }) {
     const t = setTimeout(() => void stopLive(), remaining);
     return () => clearTimeout(t);
   }, [join?.session_minutes, join?.is_host, stopLive]);
+
+  useEffect(() => {
+    if (!join || join.status === "ended") return;
+    const channel = db.channel(`live-chat:${id}`, {
+      config: { broadcast: { self: false }, presence: { key: `${me.id}:${crypto.randomUUID()}` } },
+    });
+    chatChannelRef.current = channel;
+    const refreshPresence = () => {
+      const state = channel.presenceState() as Record<string, Array<{ role?: string }>>;
+      const audience = Object.values(state).flat().filter((entry) => entry.role !== "host").length;
+      setViewers(audience);
+    };
+    channel
+      .on("broadcast", { event: "message" }, ({ payload }) => {
+        const event = payload as ChatEvent;
+        if (event?.kind === "chat") setMessages((current) => [...current.slice(-100), event]);
+      })
+      .on("broadcast", { event: "ended" }, () => setJoin((current) => current ? { ...current, status: "ended" } : current))
+      .on("presence", { event: "sync" }, refreshPresence)
+      .on("presence", { event: "join" }, refreshPresence)
+      .on("presence", { event: "leave" }, refreshPresence)
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ userId: me.id, role: join.is_host ? "host" : "viewer", onlineAt: new Date().toISOString() });
+          setChatReady(true);
+          setChatError("");
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setChatReady(false);
+          setChatError("Chat sedang menyambung ulang.");
+        }
+      });
+    return () => {
+      chatChannelRef.current = null;
+      setChatReady(false);
+      void db.removeChannel(channel);
+    };
+  }, [id, join?.status, join?.is_host, me.id]);
+
+  useEffect(() => {
+    if (!join || join.status === "ended") return;
+    const check = async () => {
+      try {
+        const status = await api.liveStatus(id);
+        if (!status || status.status === "ended") setJoin((current) => current ? { ...current, status: "ended" } : current);
+      } catch { /* koneksi singkat tidak boleh memutus video */ }
+    };
+    const timer = window.setInterval(() => void check(), 5000);
+    return () => window.clearInterval(timer);
+  }, [id, join?.status]);
 
   useEffect(() => {
     if (!join?.token || join.status === "ended") return;
@@ -165,31 +240,6 @@ function LiveRoom({ id, me }: { id: number; me: Profile }) {
         };
         cleanupFns.push(() => { localTracks.current?.forEach((t) => t.close()); void client.leave(); });
 
-        // Chat + viewer presence over Agora RTM. Best-effort: a chat/presence
-        // hiccup should never take down the video itself.
-        if (join.chat_token) {
-          try {
-            const rtm = new AgoraRTM.RTM(agoraAppId, me.id);
-            await rtm.login({ token: join.chat_token });
-            await rtm.subscribe(join.room_name, { withMessage: true, withPresence: true });
-            rtm.addEventListener("message", (evt) => {
-              if (evt.channelName !== join.room_name || typeof evt.message !== "string") return;
-              try {
-                const parsed = JSON.parse(evt.message) as ChatEvent;
-                if (parsed.kind === "chat") setMessages((m) => [...m.slice(-100), parsed]);
-              } catch { /* ignore malformed chat payloads */ }
-            });
-            const refreshPresence = () =>
-              rtm.presence
-                .getOnlineUsers(join.room_name, "MESSAGE")
-                .then((r) => setViewers(Math.max(0, (r.totalOccupancy || 1) - 1)))
-                .catch(() => {});
-            refreshPresence();
-            const presenceTimer = setInterval(refreshPresence, 10000);
-            cleanupFns.push(() => { clearInterval(presenceTimer); void rtm.logout(); });
-            (window as unknown as { __octgramRtm?: unknown }).__octgramRtm = rtm;
-          } catch { /* chat is optional; video keeps working without it */ }
-        }
       } else if (join.provider === "livekit" && livekitUrl) {
         const token = join.token;
         const room = new Room({ adaptiveStream: true, dynacast: true });
@@ -203,24 +253,20 @@ function LiveRoom({ id, me }: { id: number; me: Profile }) {
             if (t.kind === "video" && videoRef.current) videoRef.current.appendChild(t.attach());
           }
         }
-        const refreshCount = () => setViewers(Math.max(0, room.numParticipants - 1));
-        refreshCount();
-        room.on(RoomEvent.ParticipantConnected, refreshCount);
-        room.on(RoomEvent.ParticipantDisconnected, refreshCount);
         room.on(RoomEvent.TrackSubscribed, (track) => {
           if (!join.is_host && videoRef.current) videoRef.current.appendChild(track.attach());
         });
-        room.on(RoomEvent.DataReceived, (payload) => {
-          try {
-            const evt = JSON.parse(new TextDecoder().decode(payload)) as ChatEvent;
-            if (evt.kind === "chat") setMessages((m) => [...m.slice(-100), evt]);
-          } catch { /* ignore malformed payloads */ }
-        });
+        room.on(RoomEvent.Disconnected, () => setConnected(false));
         stopRef.current = () => room.disconnect();
         cleanupFns.push(() => room.disconnect());
         (window as unknown as { __octgramRoom?: Room }).__octgramRoom = room;
       }
-    })().catch((e) => !disposed && setError(errorText(e)));
+    })().catch(async (e) => {
+      if (disposed) return;
+      cleanupFns.forEach((fn) => fn());
+      if (join.is_host) await api.endLive(id).catch(() => {});
+      setError(errorText(e));
+    });
 
     return () => {
       disposed = true;
@@ -235,24 +281,19 @@ function LiveRoom({ id, me }: { id: number; me: Profile }) {
   async function sendChat(e: React.FormEvent) {
     e.preventDefault();
     const body = chatInput.trim();
-    if (!body || !join) return;
+    if (!body || !join || !chatReady || !chatChannelRef.current) return;
     const event: ChatEvent = { kind: "chat", body: body.slice(0, 240), from: me.id, name: me.display_name };
     try {
-      if (join.provider === "agora") {
-        const rtm = (window as unknown as { __octgramRtm?: { publish: (c: string, m: string) => Promise<void> } }).__octgramRtm;
-        await rtm?.publish(join.room_name, JSON.stringify(event));
-      } else {
-        const room = (window as unknown as { __octgramRoom?: Room }).__octgramRoom;
-        await room?.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(event)), { reliable: true });
-      }
+      await chatChannelRef.current.send({ type: "broadcast", event: "message", payload: event });
       setMessages((m) => [...m.slice(-100), event]);
       setChatInput("");
-    } catch { /* best-effort: dropped chat message is not fatal */ }
+      setChatError("");
+    } catch { setChatError("Komentar gagal dikirim. Coba kembali."); }
   }
 
   if (error) return <ErrorBox message={error} retry={() => go("/live")} />;
   if (!join) return <Loading />;
-  if (join.status === "ended" && !join.is_host)
+  if (join.status === "ended")
     return (
       <div className="empty">
         <h1>Live sudah berakhir</h1>
@@ -280,6 +321,9 @@ function LiveRoom({ id, me }: { id: number; me: Profile }) {
           <button className="bare live-close" onClick={() => join.is_host ? void stopLive() : go("/live")}>
             <X size={20} />
           </button>
+          <button className="bare live-fullscreen" aria-label="Layar penuh" onClick={() => void document.querySelector(".live-room")?.requestFullscreen?.()}>
+            <Maximize2 size={18} />
+          </button>
         </div>
         <div ref={videoRef} className="live-video-frame">
           {!connected && <Loading />}
@@ -304,11 +348,12 @@ function LiveRoom({ id, me }: { id: number; me: Profile }) {
             >
               {micOn ? <Mic size={18} /> : <MicOff size={18} />}
             </button>
-            <button className="danger" onClick={stopLive}>
-              Akhiri Live
+            <button className="danger" disabled={ending} onClick={stopLive}>
+              {ending ? "Mengakhiri…" : "Akhiri Live"}
             </button>
           </div>
         )}
+        {actionError && <div className="live-action-error">{actionError}</div>}
       </div>
       <aside className="live-chat">
         <div className="live-chat-log">
@@ -320,11 +365,12 @@ function LiveRoom({ id, me }: { id: number; me: Profile }) {
           <div ref={chatEndRef} />
         </div>
         <form className="live-chat-input" onSubmit={sendChat}>
-          <input value={chatInput} maxLength={240} placeholder="Kirim komentar…" onChange={(e) => setChatInput(e.target.value)} />
-          <button type="submit" aria-label="Kirim">
+          <input value={chatInput} maxLength={240} placeholder={chatReady ? "Kirim komentar…" : "Menyambungkan chat…"} disabled={!chatReady} onChange={(e) => setChatInput(e.target.value)} />
+          <button type="submit" aria-label="Kirim" disabled={!chatReady || !chatInput.trim()}>
             <Send size={17} />
           </button>
         </form>
+        {chatError && <small className="live-chat-error">{chatError}</small>}
       </aside>
     </div>
   );

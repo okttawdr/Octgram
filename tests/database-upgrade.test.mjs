@@ -29,7 +29,7 @@ test("legacy schema can be upgraded without losing profiles", async () => {
   const googleId = "50000000-0000-4000-8000-000000000005";
   await db.query("insert into auth.users(id,raw_user_meta_data) values($1,$2)", [googleId, JSON.stringify({ name: "Google Upgrade" })]);
   assert.equal((await db.query("select display_name from public.profiles where id=$1", [googleId])).rows[0].display_name, "Google Upgrade");
-  for (const name of ["003_livestream.sql", "004_grid_and_caps.sql", "005_agora_streaming.sql", "006_chat_media_reply.sql", "007_social_and_monitoring.sql", "008_archived_feed.sql", "009_post_reposters.sql", "010_view_once_media.sql", "011_admin_access.sql"]) {
+  for (const name of ["003_livestream.sql", "004_grid_and_caps.sql", "005_agora_streaming.sql", "006_chat_media_reply.sql", "007_social_and_monitoring.sql", "008_archived_feed.sql", "009_post_reposters.sql", "010_view_once_media.sql", "011_admin_access.sql", "012_live_device_lock.sql"]) {
     const sql = (await readFile(new URL(`../supabase/upgrades/${name}`, import.meta.url), "utf8"))
       .replace(/alter publication supabase_realtime add table public\.[a-z_]+;/g, "");
     await db.exec(sql);

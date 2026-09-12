@@ -23,6 +23,7 @@ Jalankan file yang belum pernah diterapkan secara berurutan. Untuk project yang 
 1. `supabase/upgrades/009_post_reposters.sql`
 2. `supabase/upgrades/010_view_once_media.sql`
 3. `supabase/upgrades/011_admin_access.sql`
+4. `supabase/upgrades/012_live_device_lock.sql`
 
 Jika project berhenti sebelum 008, mulai dari nomor sesudah migrasi terakhir yang sukses. Jangan melompati nomor.
 
@@ -34,6 +35,8 @@ Upgrade 011 mengakui administrator berdasarkan akun Auth dan profil. Identitas y
 - `shusensei27@gmail.com` atau username `octaxyzz_`
 
 Kedua akun dapat memulai live tanpa 100 pengikut. Menu internal tersedia di Pengaturan, lalu `System overview`.
+
+Upgrade 012 mengunci kontrol live ke perangkat yang memulai siaran, menolak perangkat kedua pada akun yang sama, memperbaiki status akhir live, dan menyediakan pemeriksaan status untuk penonton.
 
 ## 3. Build dan deploy
 
@@ -54,6 +57,8 @@ Setelah verifikasi sukses, commit source dan hasil perubahan konfigurasi yang me
 6. Login sebagai masing-masing administrator dan mulai live saat pengikut di bawah 100.
 7. Kirim foto dan video sekali lihat. Pastikan pengirim tidak dapat membukanya.
 8. Buka sebagai penerima, lalu tutup viewer. Muat ulang chat dan pastikan pesan serta objek media sudah hilang.
+9. Mulai live dari perangkat pertama. Pastikan akun yang sama pada perangkat kedua tidak dapat masuk sebagai host atau mengakhiri live.
+10. Uji chat penonton, lalu pastikan tombol Akhiri Live langsung menutup siaran pada semua penonton.
 
 ## 5. Catatan kompatibilitas
 

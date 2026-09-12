@@ -2,8 +2,9 @@
 
 Octgram adalah aplikasi sosial foto berbasis React/Vite, Node.js API, dan
 Supabase. Foto post diunggah langsung ke Cloudinary. Avatar dan media DM sekali
-lihat memakai Supabase Storage. Live memakai Agora RTC+RTM sebagai utama dan LiveKit sebagai
-cadangan. Panggilan 1-on-1 memakai WebRTC, Supabase Realtime, dan TURN Metered.
+lihat memakai Supabase Storage. Live memakai Agora RTC sebagai utama dan LiveKit
+sebagai cadangan. Chat dan kehadiran penonton live memakai Supabase Realtime.
+Panggilan 1-on-1 memakai WebRTC, Supabase Realtime, dan TURN Metered.
 
 ## Mulai
 
@@ -27,7 +28,7 @@ npm run verify
 
 - Project baru dan kosong: jalankan hanya `supabase/schema.sql`.
 - Project Octgram lama berbasis migration 001: backup, lalu jalankan seluruh
-  file `supabase/upgrades/002` sampai `011` secara berurutan.
+  file `supabase/upgrades/002` sampai `012` secara berurutan.
 - Jika beberapa upgrade sudah pernah berhasil, lanjutkan dari nomor berikutnya;
   jangan menjalankan `schema.sql` pada database lama.
 
