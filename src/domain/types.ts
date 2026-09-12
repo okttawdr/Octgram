@@ -1,8 +1,9 @@
 export type Profile = { id: string; username: string; display_name: string; bio: string; website: string; avatar_path: string | null; created_at?: string };
 export type Media = { path: string; width: number; height: number; bytes: number };
-export type Post = { id: number; user_id: string; caption: string; media: Media[]; thumbnail_index: number; created_at: string; author: Profile; like_count: number; comment_count: number; liked: boolean; bookmarked: boolean };
+export type Post = { id: number; user_id: string; caption: string; media: Media[]; thumbnail_index: number; created_at: string; updated_at?: string; archived?: boolean; author: Profile; collaborators?: Profile[]; like_count: number; comment_count: number; repost_count?: number; liked: boolean; bookmarked: boolean; reposted?: boolean };
 export type Comment = { id: number; post_id?: number; user_id?: string; body: string; parent_id: number | null; created_at: string; author: Profile };
-export type Notification = { id: number; kind: "like" | "comment" | "follow" | "mention" | "live"; post_id: number | null; read_at: string | null; created_at: string; actor: Profile };
+export type Notification = { id: number; kind: "like" | "comment" | "follow" | "mention" | "live" | "repost" | "collab"; post_id: number | null; read_at: string | null; created_at: string; actor: Profile };
+export type PersonEntry = { user: Profile; created_at: string };
 export type Conversation = { id: string; user_a: string; user_b: string; updated_at: string; a: Profile; b: Profile };
 export type Message = { id: number; conversation_id?: string; sender_id: string; body: string; image_path: string | null; reply_to: number | null; reply?: { id: number; body: string; image_path: string | null; sender_id: string } | null; client_id: string; created_at: string };
 export type ProfileDetails = Profile & { follower_count: number; following_count: number; post_count: number; is_following: boolean };

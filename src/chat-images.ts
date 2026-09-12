@@ -65,7 +65,6 @@ export function uploadChatImage(
     form.append("signature", sign.signature);
     form.append("public_id", sign.publicId);
     form.append("folder", sign.folder);
-    form.append("transformation", "f_auto,q_auto:low,fl_strip_profile");
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `https://api.cloudinary.com/v1_1/${sign.cloudName}/image/upload`);
     xhr.upload.onprogress = (e) => {

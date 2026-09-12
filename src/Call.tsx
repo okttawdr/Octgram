@@ -75,14 +75,23 @@ async function getCallMedia(): Promise<MediaStream> {
   throw lastError instanceof Error ? lastError : new Error("Tidak bisa mengakses kamera/mikrofon.");
 }
 
-function attachVideo(el: HTMLVideoElement | null, stream: MediaStream | null) {
+function attachVideo(el: HTMLVideoElement | null, stream: MediaStream | null, unmuteAfterPlay?: boolean) {
   if (!el) return;
   el.srcObject = stream;
   if (stream) {
+    // Autoplay of unmuted media is blocked by browsers without a fresh user
+    // gesture — which we don't reliably have once ICE finishes negotiating
+    // asynchronously. Start muted (always allowed), then unmute right after
+    // playback actually starts so the remote video never gets stuck black.
+    if (unmuteAfterPlay) el.muted = true;
     const play = () => {
-      el.play().catch(() => {
-        /* autoplay diblokir sampai ada interaksi — coba lagi saat gesture */
-      });
+      el.play()
+        .then(() => {
+          if (unmuteAfterPlay) el.muted = false;
+        })
+        .catch(() => {
+          /* still blocked — leave muted so at least the picture shows */
+        });
     };
     if (el.readyState >= 1) play();
     else el.onloadedmetadata = play;
@@ -145,7 +154,7 @@ export function CallRoom({
     const refreshRemote = () => {
       const rs = remoteStream.current;
       if (!rs || rs.getTracks().length === 0) return;
-      attachVideo(remoteVideo.current, rs);
+      attachVideo(remoteVideo.current, rs, true);
       if (!disposed) {
         setRemoteOn(rs.getVideoTracks().some((v) => v.enabled && v.readyState === "live" && !v.muted) || rs.getAudioTracks().length > 0);
         if (statusRef.current !== "Tersambung") setStatus("Tersambung");
@@ -183,7 +192,7 @@ export function CallRoom({
       requestAnimationFrame(() => {
         if (!disposed) {
           attachVideo(localVideo.current, stream.current);
-          if (remoteStream.current?.getTracks().length) attachVideo(remoteVideo.current, remoteStream.current);
+          if (remoteStream.current?.getTracks().length) attachVideo(remoteVideo.current, remoteStream.current, true);
         }
       });
       media.getTracks().forEach((t) => conn.addTrack(t, media));

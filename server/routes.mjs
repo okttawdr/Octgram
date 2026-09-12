@@ -20,9 +20,12 @@ export async function routeRequest(context) {
   }
   if (method === "GET" && pathname === "/api/feed") {
     const scope = searchParams.get("scope") || "home";
-    if (!new Set(["home", "explore", "saved", "profile"]).has(scope)) throw invalid();
+    if (!new Set(["home", "explore", "saved", "profile", "archived"]).has(scope)) throw invalid();
     return { data: await repo.feed(scope, optionalInteger(searchParams.get("beforeId")), searchParams.get("authorId")) };
   }
+  match = pathname.match(/^\/api\/profiles\/([^/]+)\/(followers|following)$/);
+  if (method === "GET" && match) return { data: await repo.followList(decodeURIComponent(match[1]), match[2]) };
+  if (method === "GET" && pathname === "/api/db-stats") return { data: await repo.dbStats() };
   if (method === "POST" && pathname === "/api/posts") {
   const value = object(body);
   const postMedia = media(value.media);
@@ -44,6 +47,13 @@ export async function routeRequest(context) {
 }
   match = pathname.match(/^\/api\/posts\/(\d+)$/);
   if (method === "GET" && match) return { data: await repo.post(integer(match[1]), user.id) };
+  if (method === "POST" && match) { const value = object(body); return { data: await repo.editPost(integer(match[1]), value.caption === undefined ? null : string(value.caption, { max: 2200 }), value.thumbnailIndex === undefined ? null : integer(value.thumbnailIndex, { min: 0 })) }; }
+  match = pathname.match(/^\/api\/posts\/(\d+)\/archive$/);
+  if (method === "POST" && match) { await repo.archivePost(integer(match[1]), boolean(object(body).enabled)); return { data: null }; }
+  match = pathname.match(/^\/api\/posts\/(\d+)\/repost$/);
+  if (method === "POST" && match) { await repo.setRepost(integer(match[1]), boolean(object(body).enabled)); return { data: null }; }
+  match = pathname.match(/^\/api\/posts\/(\d+)\/likes$/);
+  if (method === "GET" && match) return { data: await repo.postLikes(integer(match[1])) };
   match = pathname.match(/^\/api\/posts\/(\d+)\/comments$/);
   if (method === "GET" && match) return { data: await repo.comments(integer(match[1]), optionalInteger(searchParams.get("beforeId"))) };
   if (method === "POST" && match) { const value = object(body); return { status: 201, data: await repo.addComment(integer(match[1]), string(value.body, { min: 1, max: 1000 }), value.parentId == null ? null : integer(value.parentId)) }; }

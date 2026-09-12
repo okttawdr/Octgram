@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, MessageCircle, Camera, Bookmark } from "lucide-react";
+import { Search, MessageCircle, Camera, Bookmark, X } from "lucide-react";
 import {
   db,
   errorText,
@@ -88,7 +88,7 @@ export default function ProfilePage({
   uid: string;
   onUpdate: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => new URLSearchParams(window.location.search).get("edit") === "1");
   const q = useLoad(async () => {
     const profile = await api.profile(username);
     return {
@@ -99,6 +99,7 @@ export default function ProfilePage({
       posts: profile.post_count,
     };
   }, [username, uid]);
+  const [preview, setPreview] = useState(false);
   if (q.busy) return <Loading />;
   if (q.error)
     return (
@@ -114,7 +115,23 @@ export default function ProfilePage({
       <section className="profile-header panel">
         <div className="profile-cover" />
         <div className="profile-info">
-          <Avatar p={p} size={96} />
+          <button className="bare avatar-trigger" onClick={() => setPreview(true)} aria-label="Lihat foto profil">
+            <Avatar p={p} size={96} />
+          </button>
+          {preview && (
+            <div className="modal-backdrop" role="dialog" aria-modal aria-label="Foto profil">
+              <div className="avatar-preview">
+                <button className="bare avatar-preview-close" onClick={() => setPreview(false)} aria-label="Tutup">
+                  <X size={22} />
+                </button>
+                {p.avatar_path ? (
+                  <img src={photo(p.avatar_path)} alt={p.username} />
+                ) : (
+                  <Avatar p={p} size={220} />
+                )}
+              </div>
+            </div>
+          )}
           <div className="profile-heading">
             <div>
               <h1>{p.display_name || p.username}</h1>

@@ -1,5 +1,5 @@
 import { runtimeConfig } from "../config";
-import type { Comment, Conversation, LiveJoin, LiveStream, Media, Message, Notification, Post, Profile, ProfileDetails } from "../domain/types";
+import type { Comment, Conversation, LiveJoin, LiveStream, Media, Message, Notification, PersonEntry, Post, Profile, ProfileDetails } from "../domain/types";
 import { supabase } from "./supabase";
 import { apiUrl } from "./api-core.mjs";
 
@@ -32,10 +32,17 @@ export const api = {
   searchProfiles: (q: string) => request<Profile[]>("/profiles", { query: { q } }),
   profile: (username: string) => request<ProfileDetails>(`/profiles/${encodeURIComponent(username)}`),
   updateProfile: (value: Partial<Profile>) => request<Profile>("/me", { method: "PATCH", body: value }),
-  feed: (scope: "home" | "explore" | "saved" | "profile", beforeId?: number, authorId?: string) => request<Post[]>("/feed", { query: { scope, beforeId, authorId } }),
+  feed: (scope: "home" | "explore" | "saved" | "profile" | "archived", beforeId?: number, authorId?: string) => request<Post[]>("/feed", { query: { scope, beforeId, authorId } }),
   post: (id: number) => request<Post>(`/posts/${id}`),
   comments: (postId: number, beforeId?: number) => request<Comment[]>(`/posts/${postId}/comments`, { query: { beforeId } }),
-  publishPost: (caption: string, media: Media[], requestId: string, thumbnailIndex = 0) => request<number>("/posts", { method: "POST", body: { caption, media, requestId, thumbnailIndex } }),
+  publishPost: (caption: string, media: Media[], requestId: string, thumbnailIndex = 0, collabUsername?: string) => request<number>("/posts", { method: "POST", body: { caption, media, requestId, thumbnailIndex, collabUsername: collabUsername || null } }),
+  editPost: (postId: number, opts?: { caption?: string | null; thumbnailIndex?: number | null }) => request<Post>(`/posts/${postId}`, { method: "POST", body: { caption: opts?.caption ?? null, thumbnailIndex: opts?.thumbnailIndex ?? null } }),
+  archivePost: (postId: number, enabled: boolean) => request<null>(`/posts/${postId}/archive`, { method: "POST", body: { enabled } }),
+  deletePost: (postId: number) => request<null>(`/posts/${postId}`, { method: "DELETE" }),
+  setRepost: (postId: number, enabled: boolean) => request<null>(`/posts/${postId}/repost`, { method: "POST", body: { enabled } }),
+  postLikes: (postId: number) => request<PersonEntry[]>(`/posts/${postId}/likes`),
+  followList: (username: string, kind: "followers" | "following") => request<PersonEntry[]>(`/profiles/${encodeURIComponent(username)}/${kind}`),
+  dbStats: () => request<Record<string, unknown>>("/db-stats"),
   addComment: (postId: number, body: string, parentId: number | null) => request<number>(`/posts/${postId}/comments`, { method: "POST", body: { body, parentId } }),
   setLike: (postId: number, enabled: boolean) => request<null>(`/posts/${postId}/like`, { method: "POST", body: { enabled } }),
   setBookmark: (postId: number, enabled: boolean) => request<null>(`/posts/${postId}/bookmark`, { method: "POST", body: { enabled } }),

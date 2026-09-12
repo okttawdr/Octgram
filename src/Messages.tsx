@@ -386,7 +386,19 @@ function Chat({
                   <Reply size={13} />
                 </button>
                 {m.reply && (
-                  <span className="msg-quote">
+                  <span
+                    className="msg-quote"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      const el = document.getElementById("msg-" + m.reply!.id);
+                      if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el.classList.add("msg-highlight");
+                        setTimeout(() => el.classList.remove("msg-highlight"), 1200);
+                      }
+                    }}
+                  >
                     <span className="msg-quote-bar" />
                     <span className="msg-quote-text">
                       {m.reply.image_path && !m.reply.body ? "📷 Gambar" : (m.reply.body || "📷 Gambar").slice(0, 120)}

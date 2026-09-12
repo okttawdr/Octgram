@@ -17,14 +17,14 @@
   --text: #17151c;
   --muted: #726e78;
   --line: #e8e4e0;
-  --accent: #d94a1f;
-  --tint: #fdece2;
+  --accent: #2563eb;
+  --tint: #e8f0fe;
   --input: #faf8f6;
-  --pink: hsl(9 78% 52%);
-  --purple: hsl(17 82% 47%);
-  --violet: hsl(27 78% 41%);
-  --blue: hsl(6 62% 38%);
-  --cyan: hsl(37 82% 56%);
+  --pink: hsl(221 83% 53%);
+  --purple: hsl(230 76% 48%);
+  --violet: hsl(238 68% 42%);
+  --blue: hsl(213 89% 45%);
+  --cyan: hsl(199 89% 55%);
   --gradient: linear-gradient(
     115deg,
     var(--purple),
@@ -1261,14 +1261,14 @@ progress {
   --text: #f7f2ee;
   --muted: #b0a89f;
   --line: #332c28;
-  --accent: #ff8256;
-  --tint: #2e1c14;
+  --accent: #5b8def;
+  --tint: #16233d;
   --input: #16120f;
-  --pink: hsl(9 85% 62%);
-  --purple: hsl(17 88% 58%);
-  --violet: hsl(27 82% 52%);
-  --blue: hsl(6 70% 48%);
-  --cyan: hsl(37 88% 64%);
+  --pink: hsl(221 88% 66%);
+  --purple: hsl(230 82% 62%);
+  --violet: hsl(238 74% 58%);
+  --blue: hsl(213 92% 60%);
+  --cyan: hsl(199 92% 66%);
   background: var(--bg);
   color: var(--text);
   color-scheme: dark;
@@ -2166,4 +2166,25 @@ button:active {
   height: 38px;
   border-radius: 50%;
   border: none;
+}
+
+/* ---------- Avatar full preview ---------- */
+.avatar-trigger { padding: 0; border: none; background: none; border-radius: 50%; cursor: pointer; }
+.avatar-preview { position: relative; max-width: min(90vw, 420px); max-height: 90vh; display: flex; }
+.avatar-preview img { width: 100%; height: 100%; border-radius: 12px; object-fit: contain; background: var(--surface); }
+.avatar-preview-close { position: absolute; top: -40px; right: 0; color: #fff; background: rgba(0,0,0,.4); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+
+/* ---------- Settings page ---------- */
+.settings-list { display: flex; flex-direction: column; padding: 4px; }
+.settings-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 12px; border: none; background: none; text-align: left; border-radius: 10px; font-size: 0.95rem; }
+.settings-item:hover { background: var(--tint); }
+.settings-item .settings-chevron { margin-left: auto; opacity: .5; }
+.settings-item.danger { color: #e5484d; }
+
+/* ---------- Reply quote highlight ---------- */
+.msg-quote { cursor: pointer; }
+.msg-highlight { animation: msg-flash 1.2s ease; }
+@keyframes msg-flash {
+  0% { background: var(--tint); }
+  100% { background: transparent; }
 }

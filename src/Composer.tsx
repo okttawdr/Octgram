@@ -116,6 +116,7 @@ export default function Composer({ uid, followerCount }: { uid: string; follower
         setStage(`Mengunggah foto ${index + 1}/${items.length}…`);
         if (!item.publicId) {
           const sign = await api.signUpload(item.id);
+          if (!sign || !sign.signature || !sign.cloudName) throw new Error("Tidak dapat mengunggah foto: Cloudinary belum dikonfigurasi di server.");
           const uploaded = await new Promise<{ public_id: string; width: number; height: number; bytes: number }>((resolve, reject) => {
             const form = new FormData();
             form.append("file", item.blob!, "photo.webp");

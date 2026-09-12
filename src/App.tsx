@@ -11,6 +11,7 @@ import {
   LogOut,
   ArrowUpRight,
   Radio,
+  Settings as Settings2,
 } from "lucide-react";
 import AuthPage from "./Auth";
 import { configured } from "./config";
@@ -28,6 +29,7 @@ const Saved = lazy(() => import("./Saved"));
 const Notifications = lazy(() => import("./Notifications"));
 const Messages = lazy(() => import("./Messages"));
 const LivePage = lazy(() => import("./Live"));
+const SettingsPage = lazy(() => import("./Settings"));
 import { useIncomingCalls, CallRoom, IncomingCallBanner, callInvite, cancelInvite } from "./Call";
 export default function App() {
   const callback = location.pathname === "/auth/callback";
@@ -155,6 +157,8 @@ function Shell({
   else if (path === "/explore" || path === "/search")
     content = <Explore uid={uid} />;
   else if (path === "/saved") content = <Saved uid={uid} />;
+  else if (path === "/archived") content = <Saved uid={uid} archived />;
+  else if (path === "/settings") content = <SettingsPage username={p.username} />;
   else if (path === "/live" || /^\/live\/\d+$/.test(path))
     content = <LivePage id={path === "/live" ? undefined : Number(path.split("/")[2])} me={p} />;
   else if (path === "/notifications") content = <Notifications uid={uid} />;
@@ -181,7 +185,106 @@ function Shell({
     );
   else if (/^\/post\/\d+$/.test(path))
     content = <SinglePost id={Number(path.split("/")[2])} uid={uid} />;
-  else
+  else if (/^\/post\/\d+\/likes$/.test(path)) {
+    const id = Number(path.split("/")[2]);
+    const likes = useLoad(() => api.postLikes(id), [id]);
+    content = (
+      <div className="feed-column">
+        <h1>Siapa yang suka</h1>
+        <button className="bare" onClick={() => go(`/post/${id}`)}>
+          ← Kembali ke postingan
+        </button>
+        {likes.busy ? <Loading /> : likes.error ? (
+          <ErrorBox message={likes.error} retry={likes.reload} />
+        ) : likes.value && likes.value.length ? (
+          <>
+            <p className="text-muted">{likes.value.length} orang menyukai postingan ini</p>
+            <div className="like-grid">
+              {likes.value.map((entry) => (
+                <div key={entry.user.id} className="like-user" onClick={() => go(`/profile/${entry.user.username}`)}>
+                  <Avatar p={entry.user} size={48} />
+                  <small>{entry.user.username}</small>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-muted">Belum ada yang suka.</p>
+        )}
+      </div>
+    );
+  } else if (/^\/profile\/[^/]+\/followers$/.test(path) || /^\/profile\/[^/]+\/following$/.test(path)) {
+    const parts = path.split("/");
+    const username = decodeURIComponent(parts[2]);
+    const kind = parts[3] === "followers" ? "followers" : "following";
+    const title = kind === "followers" ? "Pengikut" : "Mengikuti";
+    const q2 = useLoad(() => api.followList(username, kind), [username, kind]);
+    content = (
+      <div className="feed-column">
+        <h1>{title}</h1>
+        <button className="bare" onClick={() => go(`/profile/${username}`)}>
+          ← Kembali ke profil
+        </button>
+        {q2.busy ? <Loading /> : q2.error ? (
+          <ErrorBox message={q2.error} retry={q2.reload} />
+        ) : q2.value?.length ? (
+          <div className="follow-list">
+            {q2.value.map((entry) => (
+              <div key={entry.user.id} className="follow-row" onClick={() => go(`/profile/${entry.user.username}`)}>
+                <Avatar p={entry.user} size={44} />
+                <div>
+                  <strong>{entry.user.display_name || entry.user.username}</strong>
+                  <small className="muted">@{entry.user.username}</small>
+                </div>
+                <button className="bare">
+                  <MessageCircle size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted">
+            {kind === "followers" ? "Belum ada pengikut." : "Belum ada yang diikuti."}
+          </p>
+        )}
+      </div>
+    );
+  } else if (path === "/db-stats") {
+    const ds = useLoad(() => api.dbStats(), []);
+    content = (
+      <div className="feed-column">
+        <h1>Monitor database</h1>
+        <p className="text-muted">Halaman ini bersifat internal.</p>
+        {ds.busy ? <Loading /> : ds.error ? (
+          <ErrorBox message={ds.error} retry={ds.reload} />
+        ) : ds.value ? (
+          <div className="db-stats">
+            <div className="db-stat-card">
+              <h3>Akun</h3>
+              <div className="db-stat-row"><span>Total pengguna</span><b>{String(ds.value.users)}</b></div>
+              <div className="db-stat-row"><span>Akun hidup (bypass 100 followers)</span><b>{String(ds.value.qualified_users)}</b></div>
+            </div>
+            <div className="db-stat-card">
+              <h3>Konten</h3>
+              <div className="db-stat-row"><span>Total postingan</span><b>{String(ds.value.posts)}</b></div>
+              <div className="db-stat-row"><span>Postingan arsip</span><b>{String(ds.value.archived)}</b></div>
+            </div>
+            <div className="db-stat-card">
+              <h3>Interaksi</h3>
+              <div className="db-stat-row"><span>Total suka</span><b>{String(ds.value.likes)}</b></div>
+              <div className="db-stat-row"><span>Total komentar</span><b>{String(ds.value.comments)}</b></div>
+              <div className="db-stat-row"><span>Total repost</span><b>{String(ds.value.reposts)}</b></div>
+            </div>
+            <div className="db-stat-card">
+              <h3>Koneksi</h3>
+              <div className="db-stat-row"><span>Total follow (mengikuti)</span><b>{String(ds.value.follows)}</b></div>
+              <div className="db-stat-row"><span>Postingan terbanyak</span><b>{String(ds.value.top_poster)}</b></div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  } else
     content = (
       <div className="empty">
         <h1>Halaman tidak ditemukan</h1>
@@ -222,6 +325,10 @@ function Shell({
           </button>
         </nav>
         <div className="sidebar-bottom">
+          <button className="nav-item" onClick={() => go("/settings")}>
+            <Settings2 size={22} />
+            <span>Pengaturan</span>
+          </button>
           <button className="nav-item" onClick={toggleTheme}>
             {theme === "dark" ? <Sun size={22} /> : <Moon size={22} />}
             <span>{theme === "dark" ? "Mode terang" : "Mode gelap"}</span>

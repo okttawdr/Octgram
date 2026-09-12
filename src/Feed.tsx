@@ -8,6 +8,17 @@ import {
   RefreshCw,
   ImagePlus,
   ArrowUpRight,
+  MoreHorizontal,
+  Repeat2,
+  Share2,
+  Pencil,
+  Archive,
+  Trash2,
+  X,
+  Copy,
+  Check,
+  Users,
+  AlertCircle,
 } from "lucide-react";
 import {
   date,
@@ -20,7 +31,7 @@ import {
 } from "./lib";
 import { api } from "./services/api";
 import { useLoad } from "./hooks";
-import { User, ErrorBox, Loading, Empty, RichText } from "./ui";
+import { User, Avatar, ErrorBox, Loading, Empty, RichText } from "./ui";
 type Comment = {
   id: number;
   body: string;
@@ -28,7 +39,47 @@ type Comment = {
   created_at: string;
   author: Profile;
 };
-export function PostCard({ post, uid }: { post: Post; uid: string }) {
+
+function LikesModal({ postId, onClose }: { postId: number; onClose: () => void }) {
+  const q = useLoad(() => api.postLikes(postId), [postId]);
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal aria-label="Siapa yang suka">
+      <div className="modal-card like-modal">
+        <div className="modal-header">
+          <h2>Siapa yang suka</h2>
+          <button className="bare" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+        <div className="modal-body">
+          {q.busy ? (
+            <Loading />
+          ) : q.error ? (
+            <ErrorBox message={q.error} retry={q.reload} />
+          ) : !q.value?.length ? (
+            <p className="text-muted">Belum ada yang suka.</p>
+          ) : (
+            <>
+              <div className="like-grid">
+                {q.value.map((entry) => (
+                  <div key={entry.user.id} className="like-user" onClick={() => go("/profile/" + entry.user.username)}>
+                    <Avatar p={entry.user} size={48} />
+                    <small>{entry.user.username}</small>
+                  </div>
+                ))}
+              </div>
+              <p className="text-muted text-center mt-2">
+                {q.value.length} orang menyukai postingan ini
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PostCard({ post, uid, onAction }: { post: Post; uid: string; onAction?: (action: string, postId: number) => void }) {
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState(post.liked);
   const [count, setCount] = useState(Number(post.like_count));
@@ -37,7 +88,11 @@ export function PostCard({ post, uid }: { post: Post; uid: string }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [menu, setMenu] = useState(false);
+  const [likeList, setLikeList] = useState(false);
+  const [collabList, setCollabList] = useState(false);
   const lock = useRef(false);
+  const isOwner = post.user_id === uid;
   async function like(force = false) {
     if (lock.current || (force && liked)) return;
     lock.current = true;
@@ -72,6 +127,94 @@ export function PostCard({ post, uid }: { post: Post; uid: string }) {
     }
   }
   const media = post.media[index];
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState(post.caption || "");
+  const [repostConfirm, setRepostConfirm] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [showLikes, setShowLikes] = useState(false);
+  const [showCollabs, setShowCollabs] = useState(false);
+  const [actionErr, setActionErr] = useState("");
+  const menuLock = useRef(false);
+  async function openLikes() {
+    setActionErr("");
+    try {
+      const rows = await api.postLikes(post.id);
+      setShowLikes(true);
+      setShowCollabs(false);
+      setMenuOpen(false);
+    } catch (e) {
+      setActionErr(errorText(e));
+    }
+  }
+  async function openCollabs() {
+    setActionErr("");
+    try {
+      const p = await api.post(post.id);
+      setShowCollabs(true);
+      setShowLikes(false);
+      setMenuOpen(false);
+    } catch (e) {
+      setActionErr(errorText(e));
+    }
+  }
+  async function doEdit() {
+    setActionErr("");
+    try {
+      await api.editPost(post.id, { caption: captionDraft || null });
+      setEditOpen(false);
+      onAction?.("reload", post.id);
+    } catch (e) {
+      setActionErr(errorText(e));
+    }
+  }
+  async function doArchive() {
+    setActionErr("");
+    try {
+      await api.archivePost(post.id, true);
+      setMenuOpen(false);
+      onAction?.("reload", post.id);
+    } catch (e) {
+      setActionErr(errorText(e));
+    }
+  }
+  async function doDelete() {
+    if (!confirm(`Hapus "${post.caption?.slice(0, 60) || "postingan"}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+    setActionErr("");
+    try {
+      await api.deletePost(post.id);
+      setMenuOpen(false);
+      onAction?.("reload", post.id);
+    } catch (e) {
+      setActionErr(errorText(e));
+    }
+  }
+  async function doRepost() {
+    setActionErr("");
+    try {
+      await api.setRepost(post.id, true);
+      setRepostConfirm(false);
+      setMenuOpen(false);
+      onAction?.("reload", post.id);
+    } catch (e) {
+      setActionErr(errorText(e));
+    }
+  }
+  async function doShare() {
+    try {
+      await navigator.clipboard.writeText(`https://${window.location.host}/post/${post.id}`);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      /* fallback silent */
+    }
+    setMenuOpen(false);
+  }
+  async function refreshPost() {
+    const q = useLoad;
+    // trigger re-render via parent reload; PostCard is also used inside SinglePost which will re-fetch
+  }
+  function closeActionErr() { setActionErr(""); }
   return (
     <article className="post">
       <header className="post-head">
@@ -161,8 +304,120 @@ export function PostCard({ post, uid }: { post: Post; uid: string }) {
               ))}
             </div>
           )}
+          {isOwner && (
+            <div className="action-menu-wrap">
+              <button
+                className={`bare ${menuOpen ? "active" : ""}`}
+                aria-label="Opsi postingan"
+                aria-haspopup="true"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((v) => !v)}
+              >
+                <MoreHorizontal size={22} />
+              </button>
+              {menuOpen && (
+                <div className="action-menu" role="menu">
+                  <button className="action-menu-item" role="menuitem" onClick={() => { setEditOpen(true); setMenuOpen(false); }}>
+                    <Pencil size={16} /> Edit
+                  </button>
+                  <button className="action-menu-item" role="menuitem" onClick={() => { setRepostConfirm(true); setMenuOpen(false); }}>
+                    <Repeat2 size={16} /> Repost
+                  </button>
+                  <button className="action-menu-item" role="menuitem" onClick={() => { openLikes(); }}>
+                    <Heart size={16} /> Siapa yang suka
+                  </button>
+                  <button className="action-menu-item" role="menuitem" onClick={() => { openCollabs(); }}>
+                    <Users size={16} /> Kolaborator
+                  </button>
+                  <hr className="action-menu-divider" />
+                  <button className="action-menu-item" role="menuitem" onClick={() => { doShare(); }}>
+                    {shareCopied ? <><Check size={16} /> Tersalin</> : <><Share2 size={16} /> Bagikan</>}
+                  </button>
+                  <button className="action-menu-item soft" role="menuitem" onClick={() => { doArchive(); }}>
+                    <Archive size={16} /> Arsipkan
+                  </button>
+                  <button className="action-menu-item danger" role="menuitem" onClick={() => { doDelete(); }}>
+                    <Trash2 size={16} /> Hapus
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <strong>{count.toLocaleString("id-ID")} suka</strong>
+        {isOwner && (
+          <div className="post-actions owner-actions">
+            <div className="action-menu-wrap">
+              <button
+                className={`bare ${menuOpen ? "active" : ""}`}
+                aria-label="Opsi postingan"
+                aria-haspopup="true"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((v) => !v)}
+              >
+                <MoreHorizontal size={22} />
+              </button>
+              {menuOpen && (
+                <div className="action-menu" role="menu">
+                  <button
+                    className="action-menu-item"
+                    role="menuitem"
+                    onClick={() => { setEditOpen(true); setMenuOpen(false); }}
+                  >
+                    <Pencil size={16} /> Edit
+                  </button>
+                  <button
+                    className="action-menu-item"
+                    role="menuitem"
+                    onClick={() => { setRepostConfirm(true); setMenuOpen(false); }}
+                  >
+                    <Repeat2 size={16} /> Repost
+                  </button>
+                  <button
+                    className="action-menu-item"
+                    role="menuitem"
+                    onClick={() => { openLikes(); }}
+                  >
+                    <Heart size={16} /> Siapa yang suka
+                  </button>
+                  <button
+                    className="action-menu-item"
+                    role="menuitem"
+                    onClick={() => { openCollabs(); }}
+                  >
+                    <Users size={16} /> Kolaborator
+                  </button>
+                  <hr className="action-menu-divider" />
+                  <button
+                    className="action-menu-item"
+                    role="menuitem"
+                    onClick={() => { doShare(); }}
+                  >
+                    {shareCopied ? (
+                      <><Check size={16} /> Tersalin</>
+                    ) : (
+                      <><Share2 size={16} /> Bagikan</>
+                    )}
+                  </button>
+                  <button
+                    className="action-menu-item soft"
+                    role="menuitem"
+                    onClick={() => { doArchive(); }}
+                  >
+                    <Archive size={16} /> Arsipkan
+                  </button>
+                  <button
+                    className="action-menu-item danger"
+                    role="menuitem"
+                    onClick={() => { doDelete(); }}
+                  >
+                    <Trash2 size={16} /> Hapus
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {post.caption && (
           <p className="caption">
             <button
@@ -190,6 +445,113 @@ export function PostCard({ post, uid }: { post: Post; uid: string }) {
           />
         )}
       </div>
+      {/* ===== Action modals ===== */}
+      {editOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal aria-label="Edit postingan">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h2>Edit postingan</h2>
+              <button className="bare" onClick={() => setEditOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <label className="text-muted" style={{ display: "block", marginBottom: 8 }}>
+                Caption
+              </label>
+              <textarea
+                className="caption-editor"
+                value={captionDraft}
+                onChange={(e) => setCaptionDraft(e.target.value)}
+                maxLength={2200}
+                rows={4}
+              />
+              {actionErr && <ErrorBox message={actionErr} />}
+              {captionDraft !== post.caption && (
+                <button className="primary mt-2" onClick={doEdit}>
+                  Simpan perubahan
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {repostConfirm && (
+        <div className="modal-backdrop" role="dialog" aria-modal aria-label="Repost">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h2>Repost</h2>
+              <button className="bare" onClick={() => setRepostConfirm(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="text-muted">
+                Apakah kamu yakin ingin mempost ulang ini ke feed-mu?
+              </p>
+              {actionErr && <ErrorBox message={actionErr} />}
+              <div className="modal-footer">
+                <button className="bare" onClick={() => setRepostConfirm(false)}>
+                  Batal
+                </button>
+                <button className="primary" onClick={doRepost}>
+                  Repost sekarang
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {shareCopied && (
+        <div className="toast">
+          <Check size={16} /> Tersalin ke clipboard
+        </div>
+      )}
+
+      {/* Likes list */}
+      {showLikes && (
+        <LikesModal postId={post.id} onClose={() => setShowLikes(false)} />
+      )}
+
+      {/* Collabs */}
+      {showCollabs && (
+        <div className="modal-backdrop" role="dialog" aria-modal aria-label="Kolaborator">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h2>Kolaborator</h2>
+              <button className="bare" onClick={() => setShowCollabs(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {post.collaborators && post.collaborators.length > 0 ? (
+                <>
+                  <div className="collab-list">
+                    {post.collaborators.map((c) => (
+                      <div key={c.id} className="collab-chip">
+                        <Avatar p={c} size={24} />
+                        {c.display_name || c.username}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-muted text-center mt-2">
+                    Postingan ini dibuat bersama {post.collaborators.length} orang
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted">Postingan ini hanya dibuat oleh satu orang.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Click-outside modal backdrop */}
+      {editOpen || repostConfirm || showLikes || showCollabs ? (
+        <div className="modal-backdrop" onClick={() => { setEditOpen(false); setRepostConfirm(false); setShowLikes(false); setShowCollabs(false); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.3)", zIndex: 70 }} />
+      ) : null}
     </article>
   );
 }
@@ -318,7 +680,7 @@ export default function Feed({
 }: {
   uid: string;
   authorId?: string;
-  variant?: "home" | "explore" | "saved";
+  variant?: "home" | "explore" | "saved" | "archived";
 }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [busy, setBusy] = useState(true);
@@ -425,7 +787,9 @@ export default function Feed({
               ? "Belum ada foto"
               : variant === "saved"
                 ? "Belum ada postingan tersimpan"
-                : variant === "explore"
+                : variant === "archived"
+                  ? "Belum ada postingan diarsipkan"
+                  : variant === "explore"
                   ? "Belum ada cerita untuk dijelajahi"
                   : "Ceritamu dimulai di sini"
           }
@@ -435,11 +799,13 @@ export default function Feed({
               ? "Foto yang dibagikan akan tampil di sini."
               : variant === "saved"
                 ? "Tekan ikon simpan pada postingan agar mudah ditemukan lagi."
-                : variant === "explore"
+                : variant === "archived"
+                  ? "Postingan yang kamu arsipkan akan muncul di sini, tersembunyi dari orang lain."
+                  : variant === "explore"
                   ? "Postingan terbaru dari komunitas akan tampil di sini."
                   : "Ikuti pengguna lewat pencarian atau bagikan foto pertamamu."}
           </p>
-          {variant !== "saved" && (
+          {variant !== "saved" && variant !== "archived" && (
             <button className="primary" onClick={() => go("/create")}>
               Bagikan foto
             </button>
